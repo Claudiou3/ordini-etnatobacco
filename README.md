@@ -65,6 +65,8 @@ I dati dell'amministratore e le chiavi cifrate vivono nella cartella `data/` (in
 
    Apri http://localhost:3000. Crea la password amministratore, registra un agente (dopo aver confermato l'email, se abilitata) e accedi.
 
+   In produzione: https://ordini-etnatobacco.vercel.app
+
 ## Flusso dati previsto
 
 1. L'agente si autentica (Supabase Auth).
