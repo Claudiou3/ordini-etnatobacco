@@ -34,20 +34,23 @@ export function cleanKey(value: unknown): string {
   return normalize(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-async function ensureFile(): Promise<string> {
+async function ensureFile(): Promise<string | null> {
   if (existsSync(WORKING_FILE)) return WORKING_FILE;
   if (existsSync(ROOT_FILE)) {
     await fs.mkdir(DATA_DIR, { recursive: true });
     await fs.copyFile(ROOT_FILE, WORKING_FILE);
     return WORKING_FILE;
   }
-  throw new Error("File anagrafica_clienti.xlsx non trovato.");
+  // Nessun file Excel (es. in produzione su Vercel): la ricerca clienti
+  // userà SOLO Supabase, dove l'anagrafica è già importata.
+  return null;
 }
 
 type Parsed = { startRow: number; headers: string[]; rows: unknown[][] };
 
 async function parse(): Promise<Parsed> {
   const file = await ensureFile();
+  if (!file) throw new Error("File anagrafica_clienti.xlsx non trovato.");
   const wb = await XLSXPopulate.fromFileAsync(file);
   const sheet = wb.sheet(0);
   const range = sheet.usedRange();
@@ -98,6 +101,7 @@ let cache: { mtimeMs: number; records: AnagraficaMatch[] } | null = null;
 
 async function readRecords(): Promise<AnagraficaMatch[]> {
   const file = await ensureFile();
+  if (!file) return []; // nessun file Excel: l'anagrafica si legge da Supabase
   const stat = await fs.stat(file);
   if (cache && cache.mtimeMs === stat.mtimeMs) return cache.records;
 
@@ -202,6 +206,11 @@ export async function upsertAnagraficaExcel(
   record: AnagraficaRecord
 ): Promise<UpsertResult> {
   const file = await ensureFile();
+  if (!file) {
+    // Nessun file Excel (produzione su Vercel): i clienti vivono in Supabase,
+    // non c'è un file locale da aggiornare.
+    return { created: false };
+  }
   const wb = await XLSXPopulate.fromFileAsync(file);
   const sheet = wb.sheet(0);
   const range = sheet.usedRange();
@@ -305,6 +314,16 @@ export async function mergeAnagraficaExcel(
   if (records.length === 0) return { inserted: 0, updated: 0, skipped: 0 };
 
   const file = await ensureFile();
+  if (!file) {
+    // Nessun file Excel (produzione su Vercel): l'anagrafica va importata
+    // direttamente in Supabase; il merge locale non è applicabile.
+    return {
+      inserted: 0,
+      updated: 0,
+      skipped: records.length,
+      error: "File anagrafica locale non presente: importa direttamente nel database (Supabase).",
+    };
+  }
   const wb = await XLSXPopulate.fromFileAsync(file);
   const sheet = wb.sheet(0);
   const range = sheet.usedRange();
