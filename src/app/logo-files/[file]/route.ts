@@ -21,7 +21,10 @@ export async function GET(
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=3600, must-revalidate",
+      // NIENTE cache (CDN/browser): il logo deve mostrare sempre l'ultimo
+      // caricamento. La cache era la causa del logo "che non cambiava"
+      // anche dopo una sostituzione riuscita.
+      "Cache-Control": "no-store",
     },
   });
 }
