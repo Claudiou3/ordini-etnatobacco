@@ -25,9 +25,9 @@ const CONFIG_FILE = appDataPath("logos.json");
 const LOGOS_PREFIX = "logos";
 const LOGOS_CONFIG_SETTING_KEY = "logos_config";
 
-/** Misura di riferimento = dimensione intrinseca del logo attuale. */
-const MAX_WIDTH = 300;
-const MAX_HEIGHT = 170;
+/** Misura di riferimento = formato in cui vengono normalizzati i loghi. */
+const MAX_WIDTH = 200;
+const MAX_HEIGHT = 165;
 
 export type LogoInfo = {
   /** URL pubblico (con cache-busting) oppure stringa vuota se assente. */
@@ -216,7 +216,7 @@ export async function saveUploadedLogo(
     }
 
     // Entrambi i loghi vengono normalizzati allo STESSO formato esatto
-    // 300x170 (con trasparenza attorno, se le proporzioni differiscono):
+    // 200x165 (con trasparenza attorno, se le proporzioni differiscono):
     // cosi' in pagina hanno sempre lo stesso ingombro massimo.
     output = await image
       .resize({
