@@ -6,11 +6,11 @@ import {
   getAdminSessionKey,
   verifyAdminSessionToken,
 } from "@/lib/admin/store";
+import { SUBADMIN_SESSION_COOKIE } from "@/lib/session-cookies";
 import type { Agent } from "@/lib/types";
 
 const DEMO_COOKIE = "ioi_demo_session";
-/** Sessione dei sub-amministratori (livello inferiore: solo lettura). */
-export const SUBADMIN_SESSION_COOKIE = "ioi_subadmin_session";
+export { SUBADMIN_SESSION_COOKIE };
 
 // Cache breve (30s) dell'utente Supabase per sessione: evita il rate limit
 // dell'API Auth (429) che scatta con molte chiamate ravvicinate

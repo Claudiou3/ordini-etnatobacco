@@ -5,6 +5,8 @@ import { appDataDir } from "@/lib/data-dir";
 import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
 import { getSetting } from "@/lib/settings/runtime";
 import { getEncryptionKey } from "@/lib/crypto";
+// Ri-esportato dal modulo condiviso (usato anche dal Proxy/Middleware Edge).
+export { ADMIN_SESSION_COOKIE } from "@/lib/session-cookies";
 
 /**
  * Account amministratore + sessione.
@@ -19,7 +21,6 @@ const DATA_DIR = appDataDir();
 const ADMIN_FILE = path.join(DATA_DIR, "admin.json");
 const ADMIN_SETTING_KEY = "admin_account";
 
-export const ADMIN_SESSION_COOKIE = "ioi_admin_session";
 export const ADMIN_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type AdminRecord = {
