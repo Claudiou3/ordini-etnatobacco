@@ -157,9 +157,9 @@ export async function importCustomersExcel(
     }
 
     // 1) Anagrafica LOCALE (copia di lavoro data/anagrafica_clienti.xlsx):
-    //    è la fonte usata da ricerca clienti e modulo ordine.
+    //    è la fonte usata da ricerca clienti e modulo ordine. Su Vercel il
+    //    file non esiste: il merge locale viene saltato senza bloccare.
     const excelResult = await mergeAnagraficaExcel(records);
-    if (excelResult.error) return { error: excelResult.error };
 
     // 2) Database Supabase: solo se c'è la service role (altrimenti la RLS
     //    bloccherebbe l'import e il tentativo sarebbe solo una perdita di tempo).
@@ -176,14 +176,20 @@ export async function importCustomersExcel(
 
     revalidatePath("/clienti");
     revalidatePath("/dashboard");
+
+    const localError = excelResult.error;
     return {
       inserted: excelResult.inserted + (db?.inserted ?? 0),
       updated: excelResult.updated + (db?.updated ?? 0),
       skipped: excelResult.skipped + (db?.skipped ?? 0),
       note:
         db === null
-          ? "Anagrafica locale aggiornata; database non raggiungibile (service role non configurata)."
-          : undefined,
+          ? localError
+            ? `Database non raggiungibile (service role non configurata): ${localError}`
+            : "Anagrafica locale aggiornata; database non raggiungibile (service role non configurata)."
+          : localError
+            ? `Importati in Supabase; anagrafica locale non aggiornata: ${localError}`
+            : undefined,
     };
   } catch (err) {
     return { error: "Errore durante l'importazione: " + (err as Error).message };

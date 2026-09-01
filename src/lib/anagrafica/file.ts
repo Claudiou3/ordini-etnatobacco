@@ -316,14 +316,9 @@ export async function mergeAnagraficaExcel(
 
   const file = await ensureFile();
   if (!file) {
-    // Nessun file Excel (produzione su Vercel): l'anagrafica va importata
-    // direttamente in Supabase; il merge locale non è applicabile.
-    return {
-      inserted: 0,
-      updated: 0,
-      skipped: records.length,
-      error: "File anagrafica locale non presente: importa direttamente nel database (Supabase).",
-    };
+    // Nessun file Excel (produzione su Vercel): l'anagrafica viene importata
+    // direttamente in Supabase dal chiamante; qui non c'e' nulla da fare.
+    return { inserted: 0, updated: 0, skipped: 0 };
   }
   const wb = await XLSXPopulate.fromFileAsync(file);
   const sheet = wb.sheet(0);
