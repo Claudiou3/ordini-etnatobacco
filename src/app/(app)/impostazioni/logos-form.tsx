@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { deleteLogoAction, uploadLogoAction } from "./actions";
 import type { LogoInfo } from "@/lib/logos";
@@ -16,7 +15,6 @@ export function LogosForm({
 }: {
   logos: { logo1: LogoInfo; logo2: LogoInfo };
 }) {
-  const router = useRouter();
   const [busy, setBusy] = useState<1 | 2 | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -42,9 +40,12 @@ export function LogosForm({
       setMessage(
         `Logo ${position === 1 ? "1" : "2"} ${
           position === 1 && !logo1Custom ? "caricato" : "sostituito"
-        }. La modifica è visibile subito.`
+        }. Ricarico la pagina…`
       );
-      router.refresh();
+      // Ricarica COMPLETA della pagina: garantisce che sidebar, login e
+      // anteprime mostrino subito l'immagine nuova (aggira eventuali
+      // versioni vecchie tenute in memoria dal browser).
+      window.setTimeout(() => window.location.reload(), 600);
     }
     setBusy(null);
   }
@@ -70,10 +71,10 @@ export function LogosForm({
     } else {
       setMessage(
         isFirst
-          ? "Primo logo eliminato: è stato ripristinato il logo originale."
-          : "Secondo logo eliminato."
+          ? "Primo logo eliminato: è stato ripristinato il logo originale. Ricarico la pagina…"
+          : "Secondo logo eliminato. Ricarico la pagina…"
       );
-      router.refresh();
+      window.setTimeout(() => window.location.reload(), 600);
     }
     setBusy(null);
   }
