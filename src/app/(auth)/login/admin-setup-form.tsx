@@ -31,7 +31,7 @@ export function AdminSetupForm() {
         Crea la password per l&apos;account amministratore: potrai gestire le
         API key nella sezione Impostazioni.
       </p>
-      <form action={formAction} onSubmit={handleSubmit} className="auth-form">
+      <form action={formAction} onSubmit={handleSubmit} className="auth-form" autoComplete="off">
         <label className="form-field">
           <span className="form-label">Email amministratore</span>
           <input
@@ -40,7 +40,7 @@ export function AdminSetupForm() {
             name="email"
             placeholder="Inserisci la tua email"
             required
-            autoComplete="username"
+            autoComplete="off"
           />
         </label>
 

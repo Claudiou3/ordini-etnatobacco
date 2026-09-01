@@ -18,7 +18,7 @@ export function AdminLoginForm() {
         Accedi come amministratore o sub-amministratore. Solo
         l&apos;amministratore può modificare le Impostazioni.
       </p>
-      <form action={formAction} className="auth-form">
+      <form action={formAction} className="auth-form" autoComplete="off">
         <label className="form-field">
           <span className="form-label">Email</span>
           <input
@@ -27,14 +27,14 @@ export function AdminLoginForm() {
             name="email"
             placeholder="Inserisci la tua email"
             required
-            autoComplete="username"
+            autoComplete="off"
           />
         </label>
 
         <PasswordField
           name="password"
           label="Password"
-          autoComplete="current-password"
+          autoComplete="new-password"
           placeholder="Inserisci la password"
         />
 
