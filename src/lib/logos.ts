@@ -215,12 +215,16 @@ export async function saveUploadedLogo(
       return { ok: false, error: "Formato non valido: usa solo JPG o PNG." };
     }
 
+    // Entrambi i loghi vengono normalizzati allo STESSO formato esatto
+    // 300x170 (con trasparenza attorno, se le proporzioni differiscono):
+    // cosi' in pagina hanno sempre lo stesso ingombro massimo.
     output = await image
       .resize({
         width: MAX_WIDTH,
         height: MAX_HEIGHT,
-        fit: "inside",
-        withoutEnlargement: true,
+        fit: "contain",
+        position: "centre",
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
       })
       .png()
       .toBuffer();
