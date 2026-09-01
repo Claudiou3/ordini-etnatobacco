@@ -962,6 +962,10 @@ h2 { font-size: 21px; }
 
   .auth-shell { padding: 16px; }
   .auth-card { padding: 26px 18px; border-radius: 14px; }
+  .auth-logo-img {
+    /* Su smartphone login/registrazione: loghi 110x110. */
+    width: 110px; height: 110px;
+  }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .span-2 { grid-column: span 1; }
   .search-row { flex-direction: column; align-items: stretch; }
