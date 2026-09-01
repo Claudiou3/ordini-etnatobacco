@@ -58,8 +58,8 @@ button, input, select, textarea { font: inherit; }
 }
 .brand-logos { display: grid; gap: 8px; justify-items: center; width: 100%; }
 .brand-logo {
-  /* Scatola FISSA identica per entrambi i loghi (sidebar): 150x150. */
-  width: 150px; height: 150px;
+  /* Scatola FISSA identica per entrambi i loghi (sidebar): 80x80. */
+  width: 80px; height: 80px;
   object-fit: contain; object-position: center;
 }
 .brand-dot { width: 10px; height: 10px; background: var(--primary); border-radius: 50%; display: inline-block; margin-right: 8px; }
@@ -963,8 +963,8 @@ h2 { font-size: 21px; }
   .auth-shell { padding: 16px; }
   .auth-card { padding: 26px 18px; border-radius: 14px; }
   .auth-logo-img {
-    /* Su smartphone login/registrazione: loghi 70x70. */
-    width: 70px; height: 70px;
+    /* Su smartphone login/registrazione: loghi 100x100. */
+    width: 100px; height: 100px;
   }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .span-2 { grid-column: span 1; }
