@@ -22,8 +22,8 @@ export function LogosForm({
   const [message, setMessage] = useState<string | null>(null);
 
   // Il primo logo "caricato dall'amministratore" (quello originale in
-  // public/logo-detomaso.png non ha l'URL /logos/...).
-  const logo1Custom = logos.logo1.src.startsWith("/logos/");
+  // public/logo-detomaso.png non ha l'URL /logo-files/...).
+  const logo1Custom = logos.logo1.src.startsWith("/logo-files/");
 
   async function handleUpload(position: 1 | 2, file: File) {
     setBusy(position);

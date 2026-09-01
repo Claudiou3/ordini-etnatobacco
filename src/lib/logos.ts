@@ -2,18 +2,28 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import { appDataPath, appRootPath } from "@/lib/data-dir";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
+import { ORDERS_BUCKET } from "@/lib/orders/storage";
 
 /**
  * Gestione dei LOGHI della piattaforma (lato amministratore).
  * - Primo logo (logo-1.png): quello in alto, di default e' l'attuale
  *   public/logo-detomaso.png finche' non viene sostituito.
  * - Secondo logo (logo-2.png): compare sotto il primo (opzionale).
- * I file caricati (JPG/PNG) vengono ridimensionati alla misura del logo
- * attuale (max 300x170, senza ingrandire) ed esportati come PNG.
+ *
+ * ONLINE (Vercel): il filesystem e' in sola lettura, quindi i PNG caricati
+ * vengono salvati in Supabase Storage (bucket "ordini", cartella "logos/")
+ * e serviti dalla rotta /logo-files/logo-<n>.png (pubblica).
+ * LOCALE: cartella public/logos/ (come prima).
+ * La configurazione (timestamp per il cache-busting) vive in app_settings
+ * (chiave "logos_config") online, altrimenti in data/logos.json.
  */
 
 const LOGOS_DIR = path.join(appRootPath("public"), "logos");
 const CONFIG_FILE = appDataPath("logos.json");
+const LOGOS_PREFIX = "logos";
+const LOGOS_CONFIG_SETTING_KEY = "logos_config";
 
 /** Misura di riferimento = dimensione intrinseca del logo attuale. */
 const MAX_WIDTH = 300;
@@ -30,7 +40,62 @@ type LogosConfig = {
   logo2?: { updatedAt: string };
 };
 
+function logoStorageKey(position: 1 | 2): string {
+  return `${LOGOS_PREFIX}/logo-${position}.png`;
+}
+
+/** Metadati del logo su Storage, se presente. */
+async function storageLogoInfo(
+  position: 1 | 2
+): Promise<{ updatedAt: string } | null> {
+  const supabase = await createAdminClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.storage
+    .from(ORDERS_BUCKET)
+    .list(LOGOS_PREFIX);
+  if (error || !data) return null;
+  const item = data.find((f) => f.name === `logo-${position}.png`);
+  if (!item) return null;
+  return { updatedAt: item.updated_at ?? new Date().toISOString() };
+}
+
+async function downloadLogoFile(position: 1 | 2): Promise<Buffer | null> {
+  const supabase = await createAdminClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.storage
+    .from(ORDERS_BUCKET)
+    .download(logoStorageKey(position));
+  if (error || !data) return null;
+  try {
+    return Buffer.from(await data.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+async function uploadLogoFile(position: 1 | 2, buffer: Buffer): Promise<boolean> {
+  const supabase = await createAdminClient();
+  if (!supabase) return false;
+  const { error } = await supabase.storage.from(ORDERS_BUCKET).upload(
+    logoStorageKey(position),
+    buffer,
+    { contentType: "image/png", upsert: true }
+  );
+  return !error;
+}
+
+async function removeLogoFile(position: 1 | 2): Promise<boolean> {
+  const supabase = await createAdminClient();
+  if (!supabase) return false;
+  const { error } = await supabase.storage
+    .from(ORDERS_BUCKET)
+    .remove([logoStorageKey(position)]);
+  return !error;
+}
+
 async function readConfig(): Promise<LogosConfig> {
+  const remote = await getAppSetting<LogosConfig>(LOGOS_CONFIG_SETTING_KEY);
+  if (remote) return remote;
   try {
     return JSON.parse(await fs.readFile(CONFIG_FILE, "utf8")) as LogosConfig;
   } catch {
@@ -38,7 +103,15 @@ async function readConfig(): Promise<LogosConfig> {
   }
 }
 
-async function logoInfo(
+async function writeConfig(config: LogosConfig): Promise<void> {
+  const saved = await setAppSetting(LOGOS_CONFIG_SETTING_KEY, config);
+  if (!saved) {
+    await fs.mkdir(path.dirname(CONFIG_FILE), { recursive: true });
+    await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
+  }
+}
+
+async function localLogoInfo(
   position: 1 | 2,
   config: LogosConfig
 ): Promise<LogoInfo> {
@@ -48,9 +121,23 @@ async function logoInfo(
     const v =
       config[`logo${position}`]?.updatedAt ??
       String(Math.round(stat.mtimeMs));
-    return { src: `/logos/logo-${position}.png?v=${v}`, present: true };
+    return { src: `/logo-files/logo-${position}.png?v=${v}`, present: true };
   } catch {
     return { src: "", present: false };
+  }
+}
+
+
+/** PNG di un logo per la rotta /logo-files/[file]: Storage prima, poi locale. */
+export async function readLogoFile(file: string): Promise<Buffer | null> {
+  if (!/^logo-[12]\.png$/.test(file)) return null;
+  const position: 1 | 2 = file === "logo-1.png" ? 1 : 2;
+  const remote = await downloadLogoFile(position);
+  if (remote) return remote;
+  try {
+    return await fs.readFile(path.join(LOGOS_DIR, file));
+  } catch {
+    return null;
   }
 }
 
@@ -62,14 +149,18 @@ async function logoInfo(
 export async function deleteUploadedLogo(
   position: 1 | 2
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    await fs.rm(path.join(LOGOS_DIR, `logo-${position}.png`), { force: true });
-
+  const removed = await removeLogoFile(position);
+  if (removed) {
     const config = await readConfig();
     delete config[`logo${position}`];
-    await fs.mkdir(path.dirname(CONFIG_FILE), { recursive: true });
-    await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
-
+    await writeConfig(config);
+    return { ok: true };
+  }
+  try {
+    await fs.rm(path.join(LOGOS_DIR, `logo-${position}.png`), { force: true });
+    const config = await readConfig();
+    delete config[`logo${position}`];
+    await writeConfig(config);
     return { ok: true };
   } catch {
     return { ok: false, error: "Impossibile eliminare il logo." };
@@ -82,11 +173,25 @@ export async function getLogos(): Promise<{
   logo2: LogoInfo;
 }> {
   const config = await readConfig();
-  const uploaded = await logoInfo(1, config);
-  const logo2 = await logoInfo(2, config);
+  const storage1 = await storageLogoInfo(1);
+  const storage2 = await storageLogoInfo(2);
+  const logo1 =
+    storage1 !== null
+      ? {
+          src: `/logo-files/logo-1.png?v=${encodeURIComponent(storage1.updatedAt)}`,
+          present: true,
+        }
+      : await localLogoInfo(1, config);
+  const logo2 =
+    storage2 !== null
+      ? {
+          src: `/logo-files/logo-2.png?v=${encodeURIComponent(storage2.updatedAt)}`,
+          present: true,
+        }
+      : await localLogoInfo(2, config);
   return {
-    logo1: uploaded.present
-      ? uploaded
+    logo1: logo1.present
+      ? logo1
       : { src: "/logo-detomaso.png", present: true },
     logo2,
   };
@@ -95,12 +200,14 @@ export async function getLogos(): Promise<{
 /**
  * Salva il logo caricato: valida il formato (JPG/PNG), lo ridimensiona alla
  * misura del logo attuale (max 300x170, proporzioni mantenute, nessun
- * ingrandimento) e lo esporta come PNG in public/logos/.
+ * ingrandimento) e lo esporta come PNG. Online viene caricato su Supabase
+ * Storage; in locale in public/logos/.
  */
 export async function saveUploadedLogo(
   position: 1 | 2,
   input: Buffer
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  let output: Buffer;
   try {
     const image = sharp(input);
     const meta = await image.metadata();
@@ -108,7 +215,7 @@ export async function saveUploadedLogo(
       return { ok: false, error: "Formato non valido: usa solo JPG o PNG." };
     }
 
-    const output = await image
+    output = await image
       .resize({
         width: MAX_WIDTH,
         height: MAX_HEIGHT,
@@ -117,17 +224,32 @@ export async function saveUploadedLogo(
       })
       .png()
       .toBuffer();
-
-    await fs.mkdir(LOGOS_DIR, { recursive: true });
-    await fs.writeFile(path.join(LOGOS_DIR, `logo-${position}.png`), output);
-
-    const config = await readConfig();
-    config[`logo${position}`] = { updatedAt: new Date().toISOString() };
-    await fs.mkdir(path.dirname(CONFIG_FILE), { recursive: true });
-    await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
-
-    return { ok: true };
   } catch {
     return { ok: false, error: "Immagine non valida o danneggiata." };
   }
+
+  const config = await readConfig();
+  config[`logo${position}`] = { updatedAt: new Date().toISOString() };
+
+  // 1) Storage (online/Vercel).
+  const uploaded = await uploadLogoFile(position, output);
+  if (uploaded) {
+    await writeConfig(config);
+    return { ok: true };
+  }
+
+  // 2) File locale (o filesystem scrivibile).
+  try {
+    await fs.mkdir(LOGOS_DIR, { recursive: true });
+    await fs.writeFile(path.join(LOGOS_DIR, `logo-${position}.png`), output);
+    await writeConfig(config);
+    return { ok: true };
+  } catch {
+    return {
+      ok: false,
+      error:
+        "Impossibile salvare il logo: il file system è in sola lettura e lo Storage non è raggiungibile.",
+    };
+  }
 }
+
