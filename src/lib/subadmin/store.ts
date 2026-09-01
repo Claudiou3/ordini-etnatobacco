@@ -2,6 +2,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { MAX_SUBADMINS, type SubadminView } from "./types";
+import { appDataPath } from "@/lib/data-dir";
+import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
 
 /**
  * Sub-amministratori: 6 slot (1..6) creati dall'amministratore principale.
@@ -10,7 +12,8 @@ import { MAX_SUBADMINS, type SubadminView } from "./types";
  * nella Consolle). La password viene salvata come hash scrypt con salt.
  */
 
-const SUBADMIN_FILE = path.join(process.cwd(), "data", "subadmins.json");
+const SUBADMIN_FILE = appDataPath("subadmins.json");
+const SUBADMIN_SETTING_KEY = "subadmins";
 
 export { MAX_SUBADMINS, type SubadminView } from "./types";
 
@@ -23,21 +26,36 @@ export type SubadminRecord = {
 
 type Stored = { version: 1; slots: (SubadminRecord | null)[] };
 
+const EMPTY_STORED: Stored = {
+  version: 1,
+  slots: Array.from({ length: MAX_SUBADMINS }, () => null),
+};
+
+function isValidStored(raw: unknown): raw is Stored {
+  const s = raw as Stored;
+  return Boolean(s && s.version === 1 && Array.isArray(s.slots));
+}
+
 async function load(): Promise<Stored> {
+  // 1) Supabase (online, filesystem in sola lettura).
+  const remote = await getAppSetting<Stored>(SUBADMIN_SETTING_KEY);
+  if (isValidStored(remote)) return remote;
+  // 2) File locale.
   try {
     const raw = JSON.parse(await fs.readFile(SUBADMIN_FILE, "utf8")) as Stored;
-    if (Array.isArray(raw.slots)) {
-      return { version: 1, slots: raw.slots };
-    }
+    if (isValidStored(raw)) return raw;
   } catch {
     // file assente o non valido
   }
-  return { version: 1, slots: Array.from({ length: MAX_SUBADMINS }, () => null) };
+  return EMPTY_STORED;
 }
 
 async function save(stored: Stored): Promise<void> {
-  await fs.mkdir(path.dirname(SUBADMIN_FILE), { recursive: true });
-  await fs.writeFile(SUBADMIN_FILE, JSON.stringify(stored, null, 2));
+  const saved = await setAppSetting(SUBADMIN_SETTING_KEY, stored);
+  if (!saved) {
+    await fs.mkdir(path.dirname(SUBADMIN_FILE), { recursive: true });
+    await fs.writeFile(SUBADMIN_FILE, JSON.stringify(stored, null, 2));
+  }
 }
 
 function hashPassword(password: string, salt: string): string {

@@ -9,6 +9,7 @@ import {
   ADMIN_SESSION_TTL_MS,
   createAdmin,
   createAdminSessionToken,
+  getAdminSessionKey,
   verifyAdmin,
 } from "@/lib/admin/store";
 import { verifySubadmin } from "@/lib/subadmin/store";
@@ -16,7 +17,6 @@ import {
   SUBADMIN_SESSION_COOKIE,
   localSessionCookieOptions,
 } from "@/lib/supabase/session";
-import { getEncryptionKey } from "@/lib/crypto";
 
 const DEMO_COOKIE = "ioi_demo_session";
 
@@ -132,7 +132,7 @@ export async function createAdminPassword(
   const result = await createAdmin(email, password);
   if (!result.ok) return { error: result.error ?? "Errore durante la creazione." };
 
-  const key = await getEncryptionKey();
+  const key = await getAdminSessionKey();
   const token = createAdminSessionToken(email, key);
   const cookieStore = await cookies();
   cookieStore.set(ADMIN_SESSION_COOKIE, token, {
@@ -154,7 +154,7 @@ export async function adminLogin(
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
 
-  const key = await getEncryptionKey();
+  const key = await getAdminSessionKey();
 
   // Amministratore principale.
   if (await verifyAdmin(email, password)) {

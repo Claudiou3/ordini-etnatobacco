@@ -3,6 +3,8 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import XLSXPopulate from "xlsx-populate";
 import JSZip from "jszip";
+import { appDataDir, appDataPath, appRootPath } from "@/lib/data-dir";
+import { uploadOrderExcel, downloadWorkingTemplate } from "./storage";
 
 /**
  * Generazione del MODULO ORDINE Excel.
@@ -17,9 +19,9 @@ import JSZip from "jszip";
  * correttamente leggibile ovunque anche senza ricalcolo.
  */
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const WORKING_TEMPLATE = path.join(DATA_DIR, "ordine_template.xlsx");
-const ROOT_TEMPLATE = path.join(process.cwd(), "ordine_template.xlsx");
+const DATA_DIR = appDataDir();
+const WORKING_TEMPLATE = appDataPath("ordine_template.xlsx");
+const ROOT_TEMPLATE = appRootPath("ordine_template.xlsx");
 
 export type OrderExcelCliente = {
   ragione_sociale: string;
@@ -114,15 +116,27 @@ function templateFile(): string {
   return existsSync(WORKING_TEMPLATE) ? WORKING_TEMPLATE : ROOT_TEMPLATE;
 }
 
+/**
+ * Fonte del template per generare l'ordine:
+ * 1) template di lavoro su Supabase Storage (sconti/prezzi gestiti dal Catalogo);
+ * 2) file locale data/ordine_template.xlsx;
+ * 3) template originale in root (committato nel repo).
+ */
+async function openTemplate(): Promise<{ buffer?: Buffer; file?: string }> {
+  const remote = await downloadWorkingTemplate();
+  if (remote) return { buffer: remote };
+  if (existsSync(WORKING_TEMPLATE)) return { file: WORKING_TEMPLATE };
+  if (existsSync(ROOT_TEMPLATE)) return { file: ROOT_TEMPLATE };
+  throw new Error("File ordine_template.xlsx non trovato.");
+}
+
 export async function generateOrderWorkbook(
   input: OrderExcelInput
 ): Promise<Buffer> {
-  const source = templateFile();
-  if (!existsSync(source)) {
-    throw new Error("File ordine_template.xlsx non trovato.");
-  }
-
-  const workbook = await XLSXPopulate.fromFileAsync(source);
+  const source = await openTemplate();
+  const workbook = source.buffer
+    ? await XLSXPopulate.fromDataAsync(source.buffer)
+    : await XLSXPopulate.fromFileAsync(source.file!);
   const sheet = workbook.sheet(0);
 
   const { cliente, items, totali } = input;
@@ -215,14 +229,18 @@ export async function generateOrderWorkbook(
   return injectCachedValues(rawBuffer, values);
 }
 
-/** Salva un ordine Excel nella cartella data/orders/ e ritorna l'URL pubblico. */
+/** Salva un ordine Excel (Supabase Storage se disponibile, altrimenti data/orders/) e ritorna l'URL pubblico. */
 export async function saveOrderWorkbook(
   numero_ordine: string,
   buffer: Buffer
 ): Promise<string> {
+  const fileName = `${numero_ordine}.xlsx`;
+  const uploaded = await uploadOrderExcel(fileName, buffer);
+  if (uploaded) {
+    return `/ordini-files/${encodeURIComponent(fileName)}`;
+  }
   const dir = path.join(DATA_DIR, "orders");
   await fs.mkdir(dir, { recursive: true });
-  const fileName = `${numero_ordine}.xlsx`;
   await fs.writeFile(path.join(dir, fileName), buffer);
   return `/ordini-files/${encodeURIComponent(fileName)}`;
 }

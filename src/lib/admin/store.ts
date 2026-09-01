@@ -1,17 +1,23 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { appDataDir } from "@/lib/data-dir";
+import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
+import { getSetting } from "@/lib/settings/runtime";
+import { getEncryptionKey } from "@/lib/crypto";
 
 /**
- * Account amministratore locale + sessione.
+ * Account amministratore + sessione.
  * La password viene salvata come hash scrypt con salt casuale.
- * I dati vivono in data/admin.json (cartella data/ in .gitignore).
+ * I dati vivono su Supabase (tabella app_settings, chiave "admin_account")
+ * quando disponibile, altrimenti in data/admin.json (locale).
  * L'email dell'amministratore NON e' mai mostrata nell'interfaccia:
- * viene richiesta al login (campo vuoto) e verificata contro admin.json.
+ * viene richiesta al login (campo vuoto) e verificata.
  */
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = appDataDir();
 const ADMIN_FILE = path.join(DATA_DIR, "admin.json");
+const ADMIN_SETTING_KEY = "admin_account";
 
 export const ADMIN_SESSION_COOKIE = "ioi_admin_session";
 export const ADMIN_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -24,6 +30,8 @@ type AdminRecord = {
 };
 
 async function readAdminRecord(): Promise<AdminRecord | null> {
+  const remote = await getAppSetting<AdminRecord>(ADMIN_SETTING_KEY);
+  if (remote?.email && remote?.hash) return remote;
   try {
     return JSON.parse(await fs.readFile(ADMIN_FILE, "utf8")) as AdminRecord;
   } catch {
@@ -32,8 +40,13 @@ async function readAdminRecord(): Promise<AdminRecord | null> {
 }
 
 async function writeAdminRecord(record: AdminRecord): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(ADMIN_FILE, JSON.stringify(record, null, 2), { mode: 0o600 });
+  const saved = await setAppSetting(ADMIN_SETTING_KEY, record);
+  if (!saved) {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.writeFile(ADMIN_FILE, JSON.stringify(record, null, 2), {
+      mode: 0o600,
+    });
+  }
 }
 
 export async function adminExists(): Promise<boolean> {
@@ -45,6 +58,24 @@ function hashPassword(password: string, salt: string): string {
     .scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 })
     .toString("hex");
 }
+
+/**
+ * Chiave HMAC della sessione amministratore, STABILE tra i riavvii:
+ * - se Supabase e' configurata usa un hash della service role key
+ *   (cosi' funziona anche su Vercel senza SETTINGS_ENCRYPTION_KEY);
+ * - altrimenti la chiave di cifratura locale (data/.encryption-key).
+ */
+export async function getAdminSessionKey(): Promise<Buffer> {
+  const serviceRole = await getSetting("SUPABASE_SERVICE_ROLE_KEY");
+  if (serviceRole && serviceRole.trim() !== "") {
+    return crypto
+      .createHash("sha256")
+      .update("ioi-admin-session:" + serviceRole.trim())
+      .digest();
+  }
+  return getEncryptionKey();
+}
+
 
 export async function createAdmin(
   email: string,
@@ -66,7 +97,7 @@ export async function createAdmin(
     return {
       ok: false,
       error:
-        "Impossibile salvare l'account amministratore (file system non scrivibile).",
+        "Impossibile salvare l'account amministratore (file system non scrivibile o Supabase non raggiungibile).",
     };
   }
   return { ok: true };
@@ -131,7 +162,7 @@ export async function updateAdminCredentials(
     return {
       ok: false,
       error:
-        "Impossibile salvare le nuove credenziali (file system non scrivibile).",
+        "Impossibile salvare le nuove credenziali (file system non scrivibile o Supabase non raggiungibile).",
     };
   }
   return { ok: true };

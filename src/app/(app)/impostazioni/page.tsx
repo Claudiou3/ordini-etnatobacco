@@ -1,16 +1,18 @@
 import { redirect } from "next/navigation";
 import { getCurrentAdmin } from "@/lib/supabase/session";
-import { listSettingsStatus } from "@/lib/settings/runtime";
+import { listSettingsStatus, getSetting } from "@/lib/settings/runtime";
 import { getEmailConfig } from "@/lib/email/config";
 import { getLogos } from "@/lib/logos";
 import { getShippingSettings } from "@/lib/shipping-settings";
 import { listSubadmins } from "@/lib/subadmin/store";
+import { DEFAULT_ORDER_EMAIL } from "@/lib/email/send";
 import { SettingsForm } from "./settings-form";
 import { EmailConfigForm } from "./email-config-form";
 import { ImportExcel } from "./import-excel";
 import { LogosForm } from "./logos-form";
 import { SubadminsForm } from "./subadmins-form";
 import { ShippingForm } from "./shipping-form";
+import { TestEmailButton } from "./test-email-button";
 import { AdminCredentialsPanel } from "../console/admin-credentials-panel";
 import { LogoutButton } from "../logout-button";
 
@@ -30,6 +32,8 @@ export default async function ImpostazioniPage() {
     listSubadmins(),
     getShippingSettings(),
   ]);
+
+  const orderRecipient = (await getSetting("ORDER_EMAIL_TO")) || DEFAULT_ORDER_EMAIL;
 
   return (
     <>
@@ -62,6 +66,10 @@ export default async function ImpostazioniPage() {
       <SettingsForm keys={keys} />
 
       <EmailConfigForm config={emailConfig} />
+
+      <section className="content-panel">
+        <TestEmailButton recipient={orderRecipient} />
+      </section>
 
       <section className="content-panel">
         <div className="panel-heading">

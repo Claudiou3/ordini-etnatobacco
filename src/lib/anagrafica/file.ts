@@ -3,6 +3,7 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import XLSXPopulate from "xlsx-populate";
 import type { AnagraficaRecord } from "./import";
+import { appDataDir, appRootPath } from "@/lib/data-dir";
 
 /**
  * Anagrafica clienti su file Excel (data/anagrafica_clienti.xlsx).
@@ -14,9 +15,9 @@ import type { AnagraficaRecord } from "./import";
  * clienti) vengono salvate in questa copia, in modo da restare sul server.
  */
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = appDataDir();
 const WORKING_FILE = path.join(DATA_DIR, "anagrafica_clienti.xlsx");
-const ROOT_FILE = path.join(process.cwd(), "anagrafica_clienti.xlsx");
+const ROOT_FILE = appRootPath("anagrafica_clienti.xlsx");
 
 export type AnagraficaMatch = AnagraficaRecord & {
   /** id stabile: anag-<PIVA o CF normalizzata> */

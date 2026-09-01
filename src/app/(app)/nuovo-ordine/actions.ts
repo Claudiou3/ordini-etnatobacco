@@ -282,6 +282,20 @@ export async function submitOrder(
   if (!ragioneSociale) {
     return { error: "Indica la ragione sociale del cliente." };
   }
+  // Campi obbligatori dell'anagrafica: ragione sociale + almeno uno tra
+  // P.IVA e codice fiscale (stessa regola dell'import anagrafica).
+  if (!c.partita_iva.trim() && !c.codice_fiscale.trim()) {
+    return {
+      error:
+        "Anagrafica cliente incompleta: inserisci la P.IVA o il codice fiscale.",
+    };
+  }
+  if (!c.indirizzo.trim() || !c.cap.trim() || !c.citta.trim() || !c.provincia.trim()) {
+    return {
+      error:
+        "Anagrafica cliente incompleta: inserisci indirizzo, CAP, città e provincia.",
+    };
+  }
   const dataOrdine = /^\d{4}-\d{2}-\d{2}$/.test(payload.data_ordine)
     ? payload.data_ordine
     : new Date().toISOString().slice(0, 10);

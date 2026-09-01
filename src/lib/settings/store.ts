@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { getEncryptionKey } from "@/lib/crypto";
+import { appDataDir } from "@/lib/data-dir";
 
 /**
  * Archivio impostazioni crittografate (AES-256-GCM).
@@ -9,7 +10,7 @@ import { getEncryptionKey } from "@/lib/crypto";
  * viene esposto solo lo stato (configurata / non configurata).
  */
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = appDataDir();
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 
 type StoredEntry = { cipher: string; iv: string; tag: string; updatedAt: string };

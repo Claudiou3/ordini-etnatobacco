@@ -2,6 +2,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { getDataClient } from "@/lib/supabase/data";
 import { isSupabaseConfigured } from "@/lib/settings/runtime";
+import { appDataPath } from "@/lib/data-dir";
+import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
 import {
   demoGetOrders,
   demoGetOrderDetail,
@@ -30,7 +32,10 @@ export type {
   CommissionRates,
 } from "@/lib/commission-groups";
 
-const RATES_FILE = path.join(process.cwd(), "data", "commissions.json");
+const RATES_FILE = appDataPath("commissions.json");
+const RATES_SETTING_KEY = "commission_rates";
+
+const ZERO_RATES: CommissionRates = { occhiali: 0, espositori: 0, astucci: 0 };
 
 function clampRate(value: unknown): number {
   const n = Number(value ?? 0);
@@ -38,29 +43,41 @@ function clampRate(value: unknown): number {
   return Math.min(100, Math.max(0, n));
 }
 
+function toRates(raw: unknown): CommissionRates {
+  const r = (raw ?? {}) as Partial<CommissionRates>;
+  return {
+    occhiali: clampRate(r.occhiali),
+    espositori: clampRate(r.espositori),
+    astucci: clampRate(r.astucci),
+  };
+}
+
 export async function getCommissionRates(): Promise<CommissionRates> {
+  // 1) Supabase (online, filesystem in sola lettura).
+  const remote = await getAppSetting<CommissionRates>(RATES_SETTING_KEY);
+  if (remote) return toRates(remote);
+  // 2) File locale.
   try {
     const raw = JSON.parse(await fs.readFile(RATES_FILE, "utf8")) as Partial<
       CommissionRates
     >;
-    return {
-      occhiali: clampRate(raw.occhiali),
-      espositori: clampRate(raw.espositori),
-      astucci: clampRate(raw.astucci),
-    };
+    return toRates(raw);
   } catch {
-    return { occhiali: 0, espositori: 0, astucci: 0 };
+    return { ...ZERO_RATES };
   }
 }
 
 export async function saveCommissionRates(
   rates: CommissionRates
 ): Promise<void> {
-  await fs.mkdir(path.dirname(RATES_FILE), { recursive: true });
-  await fs.writeFile(
-    RATES_FILE,
-    JSON.stringify({ ...rates, updatedAt: new Date().toISOString() }, null, 2)
-  );
+  const saved = await setAppSetting(RATES_SETTING_KEY, toRates(rates));
+  if (!saved) {
+    await fs.mkdir(path.dirname(RATES_FILE), { recursive: true });
+    await fs.writeFile(
+      RATES_FILE,
+      JSON.stringify({ ...toRates(rates), updatedAt: new Date().toISOString() }, null, 2)
+    );
+  }
 }
 
 /** Quota di imponibile per gruppo, da una lista di voci (subtotale). */

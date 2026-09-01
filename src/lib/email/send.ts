@@ -1,7 +1,6 @@
 import nodemailer from "nodemailer";
 import { getSetting } from "@/lib/settings/runtime";
-import { getEmailConfig } from "@/lib/email/config";
-import { readStoredSetting } from "@/lib/settings/store";
+import { getEmailConfig, getEmailAccountPassword } from "@/lib/email/config";
 
 /**
  * Invio email transazionali.
@@ -12,6 +11,11 @@ import { readStoredSetting } from "@/lib/settings/store";
  *     il canale "naturale" dopo il cambio gestore hosting: il mittente e'
  *     l'account stesso, quindi non servono domini verificati.
  *  2. Resend (API REST) come fallback, se e' configurata una RESEND_API_KEY.
+ *
+ * La password SMTP viene letta, in ordine di priorita':
+ *   - dalla variabile d'ambiente EMAIL_ACCOUNT_PASSWORD (utile in produzione
+ *     dove la cartella data/ potrebbe non essere disponibile), oppure
+ *   - dallo store impostazioni crittografato (Impostazioni -> server email).
  *
  * Il destinatario degli ordini e' configurabile dall'amministratore
  * (Impostazioni -> "Email destinataria ordini", chiave ORDER_EMAIL_TO);
@@ -34,14 +38,12 @@ type EmailOpts = {
   attachment?: { filename: string; content: Uint8Array };
 };
 
-const EMAIL_ACCOUNT_PASSWORD = "EMAIL_ACCOUNT_PASSWORD";
-
 /** Invia via SMTP (nodemailer) usando la configurazione dell'account aziendale. */
 async function sendViaSmtp(
   opts: EmailOpts & { recipient: string }
 ): Promise<SendEmailResult | null> {
   const config = await getEmailConfig();
-  const password = await readStoredSetting(EMAIL_ACCOUNT_PASSWORD);
+  const password = await getEmailAccountPassword();
   if (!config.account || !config.smtpServer || !password) return null;
 
   const secure = /ssl|tls|465/i.test(config.smtpSecure);
@@ -89,6 +91,7 @@ async function sendViaSmtp(
     };
   }
 }
+
 
 /** Invia via Resend (API REST, senza dipendenze extra). */
 async function sendViaResend(

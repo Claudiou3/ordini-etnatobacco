@@ -2,6 +2,12 @@ import { promises as fs } from "node:fs";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import XLSXPopulate, { type Workbook } from "xlsx-populate";
+import { appDataPath, appRootPath } from "@/lib/data-dir";
+import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
+import {
+  downloadWorkingTemplate,
+  uploadWorkingTemplate,
+} from "@/lib/orders/storage";
 
 /**
  * Gestione del catalogo contenuto in ordine_template.xlsx.
@@ -27,12 +33,17 @@ export type CatalogItem = {
   step4: boolean; // quantita' a multipli di 4 (decisione dell'amministratore)
 };
 
-const WORKING_FILE = path.join(process.cwd(), "data", "ordine_template.xlsx");
-const ROOT_TEMPLATE = path.join(process.cwd(), "ordine_template.xlsx");
+const WORKING_FILE = appDataPath("ordine_template.xlsx");
+const ROOT_TEMPLATE = appRootPath("ordine_template.xlsx");
 // Override dell'amministratore sul "multiplo di 4" per singolo articolo (riga).
-const STEP4_FILE = path.join(process.cwd(), "data", "catalog-step4.json");
+const STEP4_FILE = appDataPath("catalog-step4.json");
+const STEP4_SETTING_KEY = "catalog_step4";
 
 async function readStep4Overrides(): Promise<Record<number, boolean>> {
+  // 1) Supabase (online).
+  const remote = await getAppSetting<Record<number, boolean>>(STEP4_SETTING_KEY);
+  if (remote && typeof remote === "object") return remote;
+  // 2) File locale.
   try {
     return JSON.parse(await fs.readFile(STEP4_FILE, "utf8")) as Record<
       number,
@@ -56,12 +67,41 @@ export async function saveStep4(
   for (const u of updates) {
     overrides[u.row] = u.enabled;
   }
-  await fs.mkdir(path.dirname(STEP4_FILE), { recursive: true });
-  await fs.writeFile(STEP4_FILE, JSON.stringify(overrides, null, 2));
+  const saved = await setAppSetting(STEP4_SETTING_KEY, overrides);
+  if (!saved) {
+    await fs.mkdir(path.dirname(STEP4_FILE), { recursive: true });
+    await fs.writeFile(STEP4_FILE, JSON.stringify(overrides, null, 2));
+  }
 }
 
 function templateFile(): string {
   return existsSync(WORKING_FILE) ? WORKING_FILE : ROOT_TEMPLATE;
+}
+
+/**
+ * Apre il template di lavoro (quello con sconti/prezzi gestiti dal Catalogo):
+ * 1) versione salvata su Supabase Storage (online/Vercel);
+ * 2) file locale data/ordine_template.xlsx;
+ * 3) template originale in root (committato nel repo).
+ */
+async function openWorkbook(): Promise<Workbook> {
+  const remote = await downloadWorkingTemplate();
+  if (remote) return XLSXPopulate.fromDataAsync(remote);
+  const source = templateFile();
+  if (!existsSync(source)) {
+    throw new Error("File ordine_template.xlsx non trovato.");
+  }
+  return XLSXPopulate.fromFileAsync(source);
+}
+
+/** Salva il template di lavoro: su Storage (online) e, se non possibile, in locale. */
+async function persistWorkbook(workbook: Workbook): Promise<void> {
+  const buffer = (await workbook.outputAsync()) as Buffer;
+  const uploaded = await uploadWorkingTemplate(buffer);
+  if (!uploaded) {
+    await fs.mkdir(path.dirname(WORKING_FILE), { recursive: true });
+    await workbook.toFileAsync(WORKING_FILE);
+  }
 }
 
 function toNumber(value: unknown): number {
@@ -104,9 +144,8 @@ function findHeaderIndex(rows: unknown[][]): number {
 }
 
 export async function readCatalog(): Promise<CatalogItem[]> {
-  const file = templateFile();
-  if (!existsSync(file)) return [];
-  const workbook = await XLSXPopulate.fromFileAsync(file);
+  const workbook = await openWorkbook().catch(() => null);
+  if (!workbook) return [];
   const { startRow, rows } = readSheet(workbook);
   const headerIdx = findHeaderIndex(rows);
   if (headerIdx === -1) return [];
@@ -182,9 +221,7 @@ export async function saveDiscounts(
   updates: { row: number; sconto: number }[]
 ): Promise<void> {
   if (updates.length === 0) return;
-  const source = templateFile();
-  if (!existsSync(source)) throw new Error("Template catalogo non trovato.");
-  const workbook = await XLSXPopulate.fromFileAsync(source);
+  const workbook = await openWorkbook();
   const sheet = workbook.sheet(0);
   const { startRow, rows } = readSheet(workbook);
   const headerIdx = findHeaderIndex(rows);
@@ -204,8 +241,7 @@ export async function saveDiscounts(
   // Completa N/O su tutte le righe catalogo (non solo quelle modificate).
   await normalizeNettoColumns(workbook, rows, startRow, headerIdx);
 
-  await fs.mkdir(path.dirname(WORKING_FILE), { recursive: true });
-  await workbook.toFileAsync(WORKING_FILE);
+  await persistWorkbook(workbook);
 }
 
 /**
@@ -217,9 +253,7 @@ export async function savePrices(
   updates: { row: number; nettoEscl: number }[]
 ): Promise<void> {
   if (updates.length === 0) return;
-  const source = templateFile();
-  if (!existsSync(source)) throw new Error("Template catalogo non trovato.");
-  const workbook = await XLSXPopulate.fromFileAsync(source);
+  const workbook = await openWorkbook();
   const sheet = workbook.sheet(0);
   const { startRow, rows } = readSheet(workbook);
   const headerIdx = findHeaderIndex(rows);
@@ -243,6 +277,5 @@ export async function savePrices(
   // Completa N/O su tutte le righe catalogo (non solo quelle modificate).
   await normalizeNettoColumns(workbook, rows, startRow, headerIdx);
 
-  await fs.mkdir(path.dirname(WORKING_FILE), { recursive: true });
-  await workbook.toFileAsync(WORKING_FILE);
+  await persistWorkbook(workbook);
 }

@@ -2,6 +2,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { OrderDetail, OrderListItem } from "@/lib/types";
 import { sortOrdersByArrival } from "./sort";
+import { appDataDir } from "@/lib/data-dir";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Persistenza ORDINI in modalita' demo su file JSON (data/orders.json).
@@ -9,8 +11,8 @@ import { sortOrdersByArrival } from "./sort";
  * sopravvivono al riavvio del server anche senza Supabase.
  */
 
-const ORDERS_FILE = path.join(process.cwd(), "data", "orders.json");
-const DATA_DIR = path.join(process.cwd(), "data");
+const ORDERS_FILE = path.join(appDataDir(), "orders.json");
+const DATA_DIR = appDataDir();
 
 type StoredFile = { version: 1; orders: OrderDetail[] };
 
@@ -147,10 +149,21 @@ export async function fileRestoreOrder(orderId: string): Promise<boolean> {
   return true;
 }
 
-/** Elimina il file Excel dell'ordine (se presente) dalla cartella data/orders. */
+/** Elimina il file Excel dell'ordine (se presente) da Storage e/o da data/orders. */
 export async function deleteOrderExcelFile(numero: string): Promise<void> {
+  const fileName = `${numero}.xlsx`;
+  // Supabase Storage.
   try {
-    await fs.unlink(path.join(DATA_DIR, "orders", `${numero}.xlsx`));
+    const supabase = await createAdminClient();
+    if (supabase) {
+      await supabase.storage.from("ordini").remove([fileName]);
+    }
+  } catch {
+    // nessun problema: si tenta anche il file locale
+  }
+  // File locale.
+  try {
+    await fs.unlink(path.join(DATA_DIR, "orders", fileName));
   } catch {
     // file non presente: nessun problema
   }

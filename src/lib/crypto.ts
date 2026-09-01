@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { appDataPath } from "@/lib/data-dir";
 import crypto from "node:crypto";
 
 /**
@@ -9,7 +10,7 @@ import crypto from "node:crypto";
  *   (cartella data/ in .gitignore, mai versionata).
  */
 
-const KEY_FILE = path.join(process.cwd(), "data", ".encryption-key");
+const KEY_FILE = appDataPath(".encryption-key");
 
 let cachedKey: Buffer | null = null;
 

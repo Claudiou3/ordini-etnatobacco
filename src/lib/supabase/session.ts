@@ -3,9 +3,9 @@ import { createClient } from "./server";
 import {
   ADMIN_SESSION_COOKIE,
   ADMIN_SESSION_TTL_MS,
+  getAdminSessionKey,
   verifyAdminSessionToken,
 } from "@/lib/admin/store";
-import { getEncryptionKey } from "@/lib/crypto";
 import type { Agent } from "@/lib/types";
 
 const DEMO_COOKIE = "ioi_demo_session";
@@ -96,7 +96,7 @@ async function getAdminEmailFromSession(): Promise<string | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
   if (!token) return null;
-  const key = await getEncryptionKey();
+  const key = await getAdminSessionKey();
   return verifyAdminSessionToken(token, key);
 }
 
@@ -105,7 +105,7 @@ async function getSubadminEmailFromSession(): Promise<string | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SUBADMIN_SESSION_COOKIE)?.value;
   if (!token) return null;
-  const key = await getEncryptionKey();
+  const key = await getAdminSessionKey();
   return verifyAdminSessionToken(token, key);
 }
 

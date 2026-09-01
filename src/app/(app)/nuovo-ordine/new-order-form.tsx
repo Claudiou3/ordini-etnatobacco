@@ -99,9 +99,17 @@ export function NewOrderForm({
     const step4Ok = selectedLines.every(
       (line) => !line.step4 || isMultipleOf4(line.qty)
     );
+    const identityOk =
+      fields.partita_iva.trim().length > 0 || fields.codice_fiscale.trim().length > 0;
+    const addressOk =
+      fields.indirizzo.trim().length > 0 &&
+      fields.cap.trim().length > 0 &&
+      fields.citta.trim().length > 0 &&
+      fields.provincia.trim().length > 0;
     return (
       fields.ragione_sociale.trim().length > 0 &&
-      fields.citta.trim().length > 0 &&
+      identityOk &&
+      addressOk &&
       (hasItems || hasGifts) &&
       step4Ok &&
       !sending
@@ -114,8 +122,18 @@ export function NewOrderForm({
     if (fields.ragione_sociale.trim().length === 0) {
       reasons.push("la ragione sociale");
     }
-    if (fields.citta.trim().length === 0) {
-      reasons.push("la città di consegna");
+    const identityOk =
+      fields.partita_iva.trim().length > 0 || fields.codice_fiscale.trim().length > 0;
+    if (!identityOk) {
+      reasons.push("la P.IVA o il codice fiscale");
+    }
+    const addressOk =
+      fields.indirizzo.trim().length > 0 &&
+      fields.cap.trim().length > 0 &&
+      fields.citta.trim().length > 0 &&
+      fields.provincia.trim().length > 0;
+    if (!addressOk) {
+      reasons.push("indirizzo, CAP, città e provincia del cliente");
     }
     const hasItems = selectedLines.length > 0;
     const hasGifts = giftLines.length > 0 && giftLinesValid && giftTotalValid;

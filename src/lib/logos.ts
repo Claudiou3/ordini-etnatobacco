@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
+import { appDataPath, appRootPath } from "@/lib/data-dir";
 
 /**
  * Gestione dei LOGHI della piattaforma (lato amministratore).
@@ -11,8 +12,8 @@ import sharp from "sharp";
  * attuale (max 300x170, senza ingrandire) ed esportati come PNG.
  */
 
-const LOGOS_DIR = path.join(process.cwd(), "public", "logos");
-const CONFIG_FILE = path.join(process.cwd(), "data", "logos.json");
+const LOGOS_DIR = path.join(appRootPath("public"), "logos");
+const CONFIG_FILE = appDataPath("logos.json");
 
 /** Misura di riferimento = dimensione intrinseca del logo attuale. */
 const MAX_WIDTH = 300;

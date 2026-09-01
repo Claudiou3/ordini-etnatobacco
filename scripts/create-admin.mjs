@@ -30,7 +30,9 @@ for (const arg of process.argv.slice(2)) {
   if (arg === "--token") args.token = true;
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = process.env.DATA_DIR && process.env.DATA_DIR.trim() !== ""
+  ? process.env.DATA_DIR.trim()
+  : path.join(process.cwd(), "data");
 const ADMIN_FILE = path.join(DATA_DIR, "admin.json");
 const KEY_FILE = path.join(DATA_DIR, ".encryption-key");
 

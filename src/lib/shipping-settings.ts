@@ -2,6 +2,13 @@ import { promises as fs } from "node:fs";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import XLSXPopulate from "xlsx-populate";
+import type { Workbook } from "xlsx-populate";
+import { appDataDir, appDataPath, appRootPath } from "@/lib/data-dir";
+import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
+import {
+  downloadWorkingTemplate,
+  uploadWorkingTemplate,
+} from "@/lib/orders/storage";
 import {
   DEFAULT_SHIPPING_SETTINGS,
   round2,
@@ -25,10 +32,11 @@ import {
  * Le impostazioni salvate vivono in data/shipping-settings.json.
  */
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const SETTINGS_FILE = path.join(DATA_DIR, "shipping-settings.json");
-const WORKING_TEMPLATE = path.join(DATA_DIR, "ordine_template.xlsx");
-const ROOT_TEMPLATE = path.join(process.cwd(), "ordine_template.xlsx");
+const DATA_DIR = appDataDir();
+const SETTINGS_FILE = appDataPath("shipping-settings.json");
+const SETTINGS_SETTING_KEY = "shipping_settings";
+const WORKING_TEMPLATE = appDataPath("ordine_template.xlsx");
+const ROOT_TEMPLATE = appRootPath("ordine_template.xlsx");
 
 // Celle del template Excel usate per la spedizione (riferimenti 1-based):
 //   N291 (riga 291, colonna 14) = 0.029 → percentuale trasporto
@@ -99,9 +107,18 @@ async function readFromExcel(source?: string): Promise<ShippingSettings> {
     iva: d.iva,
   };
   try {
-    const src = source ?? templateFile();
-    if (!existsSync(src)) return fallback;
-    const workbook = await XLSXPopulate.fromFileAsync(src);
+    let workbook: Workbook | null = null;
+    if (!source) {
+      const remote = await downloadWorkingTemplate();
+      if (remote) {
+        workbook = await XLSXPopulate.fromDataAsync(remote);
+      }
+    }
+    if (!workbook) {
+      const src = source ?? templateFile();
+      if (!existsSync(src)) return fallback;
+      workbook = await XLSXPopulate.fromFileAsync(src);
+    }
     const sheet = workbook.sheet(0);
 
     const percentRaw = toNumber(
@@ -149,8 +166,14 @@ function normalize(stored: Partial<StoredShipping>): ShippingSettings {
   };
 }
 
-/** Impostazioni correnti: file salvato se presente, altrimenti da Excel. */
+/** Impostazioni correnti: Supabase (online), poi file, poi valori da Excel. */
 export async function getShippingSettings(): Promise<ShippingSettings> {
+  const remote = await getAppSetting<Partial<StoredShipping>>(
+    SETTINGS_SETTING_KEY
+  );
+  if (remote && remote.version === 1 && remote.percentuale) {
+    return normalize(remote);
+  }
   try {
     const raw = JSON.parse(
       await fs.readFile(SETTINGS_FILE, "utf8")
@@ -164,11 +187,17 @@ export async function getShippingSettings(): Promise<ShippingSettings> {
   return readFromExcel();
 }
 
-/** Sincronizza la Sezione 1 con il template Excel di lavoro. */
+/** Sincronizza la Sezione 1 con il template Excel di lavoro (Storage o file locale). */
 async function syncExcelTemplate(s: StoredShipping): Promise<void> {
-  const src = templateFile();
-  if (!existsSync(src)) return;
-  const workbook = await XLSXPopulate.fromFileAsync(src);
+  let workbook: Workbook | null = null;
+  const remote = await downloadWorkingTemplate();
+  if (remote) {
+    workbook = await XLSXPopulate.fromDataAsync(remote);
+  } else {
+    const src = templateFile();
+    if (!existsSync(src)) return;
+    workbook = await XLSXPopulate.fromFileAsync(src);
+  }
   const sheet = workbook.sheet(0);
   // Percentuale trasporto e IVA trasporto (come Excel: frazione).
   sheet.cell(ROW_TRASPORTO, COL_N).value(round2(s.percentuale.percent) / 100);
@@ -179,7 +208,12 @@ async function syncExcelTemplate(s: StoredShipping): Promise<void> {
     .formula(
       `MIN(MAX(Q288*N${ROW_TRASPORTO},${s.percentuale.min}),${s.percentuale.max})`
     );
-  await workbook.toFileAsync(WORKING_TEMPLATE);
+  // Salva: prima su Storage (online), poi su file locale.
+  const buffer = (await workbook.outputAsync()) as Buffer;
+  const uploaded = await uploadWorkingTemplate(buffer);
+  if (!uploaded) {
+    await workbook.toFileAsync(WORKING_TEMPLATE);
+  }
 }
 
 /**
@@ -206,18 +240,21 @@ export async function saveShippingSettings(
     updatedAt: new Date().toISOString(),
   };
 
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(SETTINGS_FILE, JSON.stringify(stored, null, 2), {
-      mode: 0o600,
-    });
-  } catch (err) {
-    return {
-      ok: false,
-      error:
-        "Impossibile salvare le impostazioni: " +
-        (err as Error).message,
-    };
+  const saved = await setAppSetting(SETTINGS_SETTING_KEY, stored);
+  if (!saved) {
+    try {
+      await fs.mkdir(DATA_DIR, { recursive: true });
+      await fs.writeFile(SETTINGS_FILE, JSON.stringify(stored, null, 2), {
+        mode: 0o600,
+      });
+    } catch (err) {
+      return {
+        ok: false,
+        error:
+          "Impossibile salvare le impostazioni: " +
+          (err as Error).message,
+      };
+    }
   }
 
   // Allinea il template Excel (Sezione 1) senza bloccare il salvataggio.
@@ -255,16 +292,19 @@ export async function resetShippingSettings(): Promise<ResetShippingSettingsResu
     updatedAt: new Date().toISOString(),
   };
 
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(SETTINGS_FILE, JSON.stringify(stored, null, 2), {
-      mode: 0o600,
-    });
-  } catch (err) {
-    return {
-      ok: false,
-      error: "Impossibile ripristinare i valori originali: " + (err as Error).message,
-    };
+  const saved = await setAppSetting(SETTINGS_SETTING_KEY, stored);
+  if (!saved) {
+    try {
+      await fs.mkdir(DATA_DIR, { recursive: true });
+      await fs.writeFile(SETTINGS_FILE, JSON.stringify(stored, null, 2), {
+        mode: 0o600,
+      });
+    } catch (err) {
+      return {
+        ok: false,
+        error: "Impossibile ripristinare i valori originali: " + (err as Error).message,
+      };
+    }
   }
 
   let excelWarning: string | undefined;
