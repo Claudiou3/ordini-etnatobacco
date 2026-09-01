@@ -40,6 +40,8 @@ yarn-error.log*
 /data/
 # loghi caricati dall'amministratore (cartella runtime, come data/)
 /public/logos/
+# immagini sorgente dei loghi tenute localmente
+/logo de tomaso/
 # anagrafica clienti anche nella root del progetto (mai versionare)
 /anagrafica_clienti.xlsx
 # credenziali database locali (mai versionare)
