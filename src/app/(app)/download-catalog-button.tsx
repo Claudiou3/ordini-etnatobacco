@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -9,16 +10,18 @@ type InstallPromptEvent = Event & {
 
 /**
  * Pulsante "SCARICA IL CATALOGO" nella barra laterale (lato agenti):
- * installa l'app sul dispositivo (icona nella Home di telefono/tablet).
- * Su Android/desktop prova la richiesta nativa di installazione; su
- * iPhone/iPad mostra le istruzioni "Aggiungi a Home" di Safari.
+ * permette di aggiungere l'app alla Home/scrivania del dispositivo
+ * (Android, iPhone/iPad e PC). Le istruzioni compaiono in un pannello
+ * ancorato a DESTRA (non al centro), così non coprono i campi della pagina.
  */
 export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
   const [deferred, setDeferred] = useState<InstallPromptEvent | null>(null);
   const [open, setOpen] = useState(false);
-  const iosDevice =
-    typeof window !== "undefined" &&
-    /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  // Rilevamento dispositivo (valutato solo nel browser).
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isIos = /iphone|ipad|ipod/i.test(ua);
+  const isAndroid = /android/i.test(ua);
 
   useEffect(() => {
     const onBefore = (e: Event) => {
@@ -44,6 +47,8 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
   }, [open]);
 
   async function handleClick() {
+    // Su Android e PC (Chrome/Edge) puo' partire la richiesta nativa
+    // "Installa app": la mostriamo subito se disponibile.
     if (deferred) {
       await deferred.prompt();
       try {
@@ -56,6 +61,72 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
     }
     setOpen(true);
   }
+
+  const steps = isIos
+    ? "ios"
+    : isAndroid
+      ? "android"
+      : "desktop";
+
+  const stepsContent: Record<"ios" | "android" | "desktop", ReactNode> = {
+    ios: (
+      <>
+        <p className="settings-help">
+          <strong>iPhone / iPad (Safari):</strong>
+        </p>
+        <ol className="install-steps">
+          <li>Apri il sito in Safari</li>
+          <li>
+            Tocca <strong>Condividi</strong> (in basso, quadrato con freccia
+            verso l&apos;alto)
+          </li>
+          <li>
+            Scorri e scegli <strong>&quot;Aggiungi a Home&quot;</strong>
+          </li>
+          <li>
+            Premi <strong>&quot;Aggiungi&quot;</strong>: icona sulla Home
+          </li>
+        </ol>
+      </>
+    ),
+    // STEPS_ANDROID
+    android: (
+      <>
+        <p className="settings-help">
+          <strong>Android (Chrome):</strong>
+        </p>
+        <ol className="install-steps">
+          <li>Tocca il menu ⋮ (in alto a destra)</li>
+          <li>
+            Scegli <strong>&quot;Aggiungi a schermata Home&quot;</strong>{" "}
+            oppure <strong>&quot;Installa app&quot;</strong>
+          </li>
+          <li>Conferma: l&apos;icona apparirà sulla Home</li>
+        </ol>
+      </>
+    ),
+    desktop: (
+      <>
+        <p className="settings-help">
+          <strong>PC (Windows/Mac):</strong>
+        </p>
+        <ol className="install-steps">
+          <li>Usa Chrome o Edge</li>
+          <li>
+            Clicca l&apos;icona <strong>&quot;Installa&quot;</strong> nella
+            barra degli indirizzi (monitor con freccia) oppure{" "}
+            <strong>⋮ → Installa &quot;IOI Orders&quot;</strong>
+          </li>
+          <li>
+            Conferma: icona sul desktop / menu Start che apre l&apos;app
+          </li>
+        </ol>
+        <p className="settings-help">
+          In alternativa aggiungi il sito ai <strong>preferiti</strong>.
+        </p>
+      </>
+    ),
+  };
 
   return (
     <>
@@ -72,99 +143,45 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
 
       {open && (
         <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
+          className="install-popover"
+          role="dialog"
+          aria-label="Scarica il catalogo"
         >
-          <div
-            className="modal-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Scarica il catalogo"
-          >
-            <div className="modal-head">
-              <h3>Scarica il catalogo</h3>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setOpen(false)}
-                aria-label="Chiudi"
-              >
-                ×
-              </button>
-            </div>
+          <div className="install-popover-head">
+            <h3>Scarica il catalogo</h3>
+            <button
+              type="button"
+              className="modal-close"
+              onClick={() => setOpen(false)}
+              aria-label="Chiudi"
+            >
+              ×
+            </button>
+          </div>
 
-            <div className="install-content">
-              {iconUrl ? (
+          <div className="install-content">
+            <p>
+              L&apos;app si installa su <strong>Android</strong>,{" "}
+              <strong>iPhone/iPad</strong> e <strong>PC</strong>: l&apos;icona
+              resta sul dispositivo e apre subito l&apos;applicazione.
+            </p>
+
+            {iconUrl ? (
+              <div className="install-icon-row">
                 <div className="install-icon-preview">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={iconUrl} alt="Icona catalogo" />
                 </div>
-              ) : (
-                <p className="form-note">
-                  ⚠️ L&apos;amministratore non ha ancora caricato il logo
-                  dell&apos;icona: puoi comunque installare l&apos;app.
-                </p>
-              )}
-
-              <p>
-                Salva l&apos;app sul dispositivo: sulla schermata Home comparirà
-                l&apos;icona del catalogo. Toccandola si aprirà direttamente
-                l&apos;applicazione (serve internet e l&apos;accesso con le tue
-                credenziali).
-              </p>
-
-              {iosDevice ? (
-                <>
-                  <p className="settings-help">
-                    <strong>iPhone / iPad (Safari):</strong>
-                  </p>
-                  <ol className="install-steps">
-                    <li>
-                      Tocca il pulsante <strong>Condividi</strong>{" "}
-                      (il quadrato con la freccia in alto nel browser)
-                    </li>
-                    <li>
-                      Scegli <strong>&quot;Aggiungi a Home&quot;</strong>
-                    </li>
-                    <li>
-                      Premi <strong>&quot;Aggiungi&quot;</strong>: l&apos;icona
-                      apparirà sulla Home
-                    </li>
-                  </ol>
-                </>
-              ) : (
-                <>
-                  <p className="settings-help">
-                    <strong>Android / tablet (Chrome):</strong>
-                  </p>
-                  <ol className="install-steps">
-                    <li>
-                      Tocca il menu <strong>⋮</strong> (in alto a destra)
-                    </li>
-                    <li>
-                      Scegli{" "}
-                      <strong>&quot;Installa app&quot;</strong> oppure{" "}
-                      <strong>&quot;Aggiungi a schermata Home&quot;</strong>
-                    </li>
-                    <li>
-                      Conferma: l&apos;icona apparirà sulla Home
-                    </li>
-                  </ol>
-                </>
-              )}
-
-              <div className="install-actions">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => setOpen(false)}
-                >
-                  Ok
-                </button>
+                <span>Questa sarà l&apos;icona sul dispositivo</span>
               </div>
-            </div>
+            ) : (
+              <p className="form-note">
+                ⚠️ L&apos;amministratore non ha ancora caricato il logo
+                dell&apos;icona: puoi comunque installare l&apos;app.
+              </p>
+            )}
+
+            {stepsContent[steps]}
           </div>
         </div>
       )}
