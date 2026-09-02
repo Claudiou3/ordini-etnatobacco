@@ -111,6 +111,30 @@ function toDbRow(rec) {
   };
 }
 
+const DB_FIELDS = [
+  "ragione_sociale",
+  "indirizzo",
+  "cap",
+  "citta",
+  "provincia",
+  "partita_iva",
+  "codice_fiscale",
+  "sdi",
+  "cellulare",
+  "email",
+];
+
+/** I campi LASCIATI VUOTI nel file non cancellano i valori gia' salvati. */
+function mergePreservingExisting(row, existing) {
+  const merged = { ...row };
+  for (const field of DB_FIELDS) {
+    if (merged[field] === null || merged[field] === "") {
+      merged[field] = existing[field] || null;
+    }
+  }
+  return merged;
+}
+
 async function runPool(items, worker) {
   if (items.length === 0) return;
   let next = 0;
@@ -138,7 +162,7 @@ async function loadExisting(client) {
   for (;;) {
     const { data, error } = await client
       .from("customers")
-      .select("id, partita_iva, codice_fiscale")
+      .select(["id", ...DB_FIELDS].join(", "))
       .range(from, from + 999);
     if (error) throw new Error("Lettura clienti esistenti: " + error.message);
     if (!data || data.length === 0) break;
@@ -181,8 +205,14 @@ function plan(records, byP, byF) {
       continue;
     }
     const existing = matchP || matchF;
-    if (existing) toUpdate.push({ id: existing.id, data: toDbRow(rec) });
-    else toInsert.push(toDbRow(rec));
+    if (existing) {
+      toUpdate.push({
+        id: existing.id,
+        data: mergePreservingExisting(toDbRow(rec), existing),
+      });
+    } else {
+      toInsert.push(toDbRow(rec));
+    }
   }
   return { toInsert, toUpdate, skipped };
 }

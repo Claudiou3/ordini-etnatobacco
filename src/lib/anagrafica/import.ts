@@ -86,6 +86,39 @@ function toDbRow(rec: AnagraficaRecord) {
   };
 }
 
+const DB_FIELDS = [
+  "ragione_sociale",
+  "indirizzo",
+  "cap",
+  "citta",
+  "provincia",
+  "partita_iva",
+  "codice_fiscale",
+  "sdi",
+  "cellulare",
+  "email",
+] as const;
+
+type DbRow = ReturnType<typeof toDbRow>;
+
+type ExistingRow = { id: string } & Partial<Record<(typeof DB_FIELDS)[number], string | null>>;
+
+/**
+ * Quando un cliente e' gia' presente, i campi LASCIATI VUOTI nel file NON
+ * cancellano i valori gia' salvati (es. telefono o email compilati dagli
+ * agenti): si mantiene il valore esistente. Comportamento identico
+ * all'aggiornamento della copia Excel locale.
+ */
+function mergePreservingExisting(row: DbRow, existing: ExistingRow): DbRow {
+  const merged: Record<(typeof DB_FIELDS)[number], string | null> = { ...row };
+  for (const field of DB_FIELDS) {
+    if (merged[field] === null || merged[field] === "") {
+      merged[field] = existing[field] ?? null;
+    }
+  }
+  return merged as DbRow;
+}
+
 const BATCH = 500;
 const CONCURRENCY = 8;
 
@@ -119,19 +152,21 @@ export async function importAnagrafica(
   client: SupabaseClient,
   records: AnagraficaRecord[]
 ): Promise<ImportResult> {
-  // Carica i clienti gia' presenti.
-  const existingByP = new Map<string, { id: string }>();
-  const existingByF = new Map<string, { id: string }>();
+  // Carica i clienti gia' presenti (con tutti i campi: servono a NON
+  // cancellare i valori compilati dagli agenti quando il file e' vuoto).
+  const existingByP = new Map<string, ExistingRow>();
+  const existingByF = new Map<string, ExistingRow>();
   {
     let from = 0;
     for (;;) {
       const { data, error } = await client
         .from("customers")
-        .select("id, partita_iva, codice_fiscale")
+        .select(["id", ...DB_FIELDS].join(", "))
         .range(from, from + 999);
       if (error) throw new Error("Lettura clienti esistenti: " + error.message);
       if (!data || data.length === 0) break;
-      for (const c of data) {
+      const rows = data as unknown as ExistingRow[];
+      for (const c of rows) {
         const p = cleanKey(c.partita_iva);
         const f = cleanKey(c.codice_fiscale);
         if (p) existingByP.set(p, c);
@@ -171,8 +206,14 @@ export async function importAnagrafica(
     }
     const row = toDbRow(rec);
     const existingRow = matchP || matchF;
-    if (existingRow) toUpdate.push({ id: existingRow.id, data: row });
-    else toInsert.push(row);
+    if (existingRow) {
+      toUpdate.push({
+        id: existingRow.id,
+        data: mergePreservingExisting(row, existingRow),
+      });
+    } else {
+      toInsert.push(row);
+    }
   }
 
   let inserted = 0;
