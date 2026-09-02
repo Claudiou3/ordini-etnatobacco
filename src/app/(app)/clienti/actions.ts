@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { getDataClient } from "@/lib/supabase/data";
-import { getCurrentAdmin } from "@/lib/supabase/session";
+import { getCurrentAdmin, getSessionUser } from "@/lib/supabase/session";
+import { searchCustomers } from "@/lib/customers";
+import type { Customer } from "@/lib/types";
 import { isSupabaseConfigured } from "@/lib/settings/runtime";
 import {
   demoUpdateCustomer,
@@ -11,6 +13,21 @@ import {
 } from "@/lib/demo/store";
 import { upsertAnagraficaExcel } from "@/lib/anagrafica/file";
 import { customerSchema, type CustomerInput } from "@/lib/validation";
+
+/**
+ * Ricerca clienti usata dalla sezione Clienti (stesso motore di ricerca di
+ * "Nuovo ordine"): funziona per qualsiasi utente autenticato.
+ */
+export async function searchClientiAction(
+  query: string,
+  limit = 30
+): Promise<Customer[]> {
+  const user = await getSessionUser();
+  if (!user) return [];
+  const q = query.trim();
+  if (q.length < 2) return [];
+  return searchCustomers(q, limit);
+}
 
 export type CustomerActionState = { error?: string; success?: boolean };
 
