@@ -728,7 +728,7 @@ export function NewOrderForm({
           <div className="anagrafica-save">
             <button
               type="button"
-              className="outline-button"
+              className="primary-button"
               onClick={() => void handleSaveAnagrafica()}
               disabled={savingAnagrafica || sending}
             >
