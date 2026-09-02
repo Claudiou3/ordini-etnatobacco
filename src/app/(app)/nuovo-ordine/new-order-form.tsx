@@ -9,9 +9,11 @@ import {
   useTransition,
 } from "react";
 import {
+  saveCustomerAnagraficaAction,
   searchCustomersAction,
   submitOrder,
   type CustomerSearchResult,
+  type SaveAnagraficaResult,
   type SubmitOrderResult,
 } from "./actions";
 import type { OrderGroup, OrderVariant } from "@/lib/catalog/order-catalog";
@@ -92,6 +94,12 @@ export function NewOrderForm({
   // ----- INVIO -----
   const [orderResult, setOrderResult] = useState<SubmitOrderResult | null>(null);
   const [sending, setSending] = useState(false);
+  // ----- SALVATAGGIO ANANAGRAFICA CLIENTE -----
+  const [savingAnagrafica, setSavingAnagrafica] = useState(false);
+  const [anagraficaMsg, setAnagraficaMsg] = useState<{
+    type: "ok" | "err";
+    text: string;
+  } | null>(null);
 
   function canSubmit(): boolean {
     const hasItems = selectedLines.length > 0;
@@ -203,6 +211,48 @@ export function NewOrderForm({
         setSending(false);
       }
     });
+  }
+
+  async function handleSaveAnagrafica() {
+    if (!selected) return;
+    setSavingAnagrafica(true);
+    setAnagraficaMsg(null);
+    try {
+      const payload: CustomerSearchResult = {
+        id: selected.id,
+        ragione_sociale: fields.ragione_sociale.trim(),
+        indirizzo: fields.indirizzo.trim() || null,
+        cap: fields.cap.trim() || null,
+        citta: fields.citta.trim() || null,
+        provincia: fields.provincia.trim() || null,
+        partita_iva: fields.partita_iva.trim() || null,
+        codice_fiscale: fields.codice_fiscale.trim() || null,
+        sdi: fields.sdi.trim() || null,
+        cellulare: fields.cellulare.trim() || null,
+        email: fields.email.trim() || null,
+      };
+      const res: SaveAnagraficaResult = await saveCustomerAnagraficaAction(
+        payload
+      );
+      if (res.error) {
+        setAnagraficaMsg({ type: "err", text: res.error });
+      } else {
+        setAnagraficaMsg({
+          type: "ok",
+          text:
+            "Anagrafica del cliente salvata. Al prossimo ordine la ricerca mostrerà i dati aggiornati.",
+        });
+      }
+    } catch (err) {
+      setAnagraficaMsg({
+        type: "err",
+        text:
+          "Errore durante il salvataggio: " +
+          (err instanceof Error ? err.message : String(err)),
+      });
+    } finally {
+      setSavingAnagrafica(false);
+    }
   }
 
   function setQty(row: number, value: number) {
@@ -673,6 +723,35 @@ export function NewOrderForm({
             />
           </label>
         </div>
+
+        {selected && (
+          <div className="anagrafica-save">
+            <button
+              type="button"
+              className="outline-button"
+              onClick={() => void handleSaveAnagrafica()}
+              disabled={savingAnagrafica || sending}
+            >
+              {savingAnagrafica
+                ? "Salvataggio in corso…"
+                : "Salva anagrafica aggiornata"}
+            </button>
+            <p className="settings-help">
+              Se hai compilato dati mancanti (telefono, email, indirizzo…), il
+              pulsante aggiorna la scheda del cliente: alle prossime ricerche
+              compariranno i dati corretti.
+            </p>
+          </div>
+        )}
+
+        {anagraficaMsg && (
+          <p
+            className={anagraficaMsg.type === "ok" ? "form-note" : "form-error"}
+            role="status"
+          >
+            {anagraficaMsg.text}
+          </p>
+        )}
       </section>
 
       <section className="content-panel">

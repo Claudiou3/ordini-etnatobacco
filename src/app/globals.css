@@ -389,6 +389,12 @@ h2 { font-size: 21px; }
 .form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .form-grid .span-2 { grid-column: span 2; }
 .form-actions { display: flex; gap: 10px; margin-top: 6px; }
+/* Pulsante "Salva anagrafica aggiornata" in Nuovo ordine (sotto l'intestazione) */
+.anagrafica-save {
+  margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+}
+.anagrafica-save .settings-help { margin: 0; max-width: 620px; }
 
 /* ============ Tabelle ============ */
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }

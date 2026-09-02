@@ -84,6 +84,127 @@ export async function searchCustomersAction(
   }));
 }
 
+export type SaveAnagraficaResult = {
+  ok?: boolean;
+  error?: string;
+};
+
+/**
+ * "Salva anagrafica aggiornata": aggiorna (o crea) la scheda anagrafica del
+ * cliente selezionato in Nuovo ordine con i dati compilati nel modulo.
+ * Il cliente resta disponibile nelle ricerche successive con le modifiche.
+ * Non elimina mai nulla.
+ */
+export async function saveCustomerAnagraficaAction(
+  payload: CustomerSearchResult
+): Promise<SaveAnagraficaResult> {
+  const admin = await getCurrentAdmin();
+  if (admin?.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+  const user = await getSessionUser();
+  if (!user) return { error: "Sessione scaduta. Accedi di nuovo." };
+
+  const data = {
+    ragione_sociale: payload.ragione_sociale.trim(),
+    indirizzo: (payload.indirizzo ?? "").trim(),
+    cap: (payload.cap ?? "").trim(),
+    citta: (payload.citta ?? "").trim(),
+    provincia: (payload.provincia ?? "").trim(),
+    partita_iva: (payload.partita_iva ?? "").trim(),
+    codice_fiscale: (payload.codice_fiscale ?? "").trim(),
+    sdi: (payload.sdi ?? "").trim(),
+    cellulare: (payload.cellulare ?? "").trim(),
+    email: (payload.email ?? "").trim(),
+  };
+  if (!data.ragione_sociale) {
+    return { error: "Inserisci la ragione sociale del cliente." };
+  }
+  if (!data.partita_iva && !data.codice_fiscale) {
+    return { error: "Inserisci almeno la P.IVA o il codice fiscale." };
+  }
+
+  // Senza Supabase (demo/locale): aggiorna la copia Excel di lavoro e lo store demo.
+  if (!(await isSupabaseConfigured())) {
+    const excelRes = await upsertAnagraficaExcel(data);
+    if (excelRes.error) return { error: excelRes.error };
+    demoUpsertCustomer(data);
+    revalidatePath("/nuovo-ordine");
+    revalidatePath("/clienti");
+    return { ok: true };
+  }
+
+  const supabase = await getDataClient();
+  if (!supabase) return { error: "Database non disponibile." };
+
+  let updatedBy: string | null = null;
+  if (!admin) {
+    const {
+      data: { user: u },
+    } = await supabase.auth.getUser();
+    if (!u) return { error: "Sessione scaduta. Accedi di nuovo." };
+    updatedBy = u.id;
+  }
+
+  const row = {
+    ragione_sociale: data.ragione_sociale,
+    indirizzo: data.indirizzo || null,
+    cap: data.cap || null,
+    citta: data.citta || null,
+    provincia: data.provincia || null,
+    partita_iva: data.partita_iva || null,
+    codice_fiscale: data.codice_fiscale || null,
+    sdi: data.sdi || null,
+    cellulare: data.cellulare || null,
+    email: data.email || null,
+    updated_by: updatedBy,
+  };
+
+  // Cerca il cliente da aggiornare: prima per id (se e' un uuid del DB),
+  // poi per P.IVA/codice fiscale; altrimenti lo crea.
+  let targetId: string | null = null;
+  if (payload.id && UUID_RE.test(payload.id)) {
+    const { data: found } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("id", payload.id)
+      .maybeSingle();
+    if (found) targetId = found.id as string;
+  }
+
+  if (!targetId) {
+    const conds: string[] = [];
+    if (data.partita_iva) conds.push(`partita_iva.eq.${data.partita_iva}`);
+    if (data.codice_fiscale) conds.push(`codice_fiscale.eq.${data.codice_fiscale}`);
+    if (conds.length > 0) {
+      const { data: matches } = await supabase
+        .from("customers")
+        .select("id")
+        .or(conds.join(","))
+        .limit(2);
+      if (matches && matches.length === 1) targetId = matches[0].id as string;
+      else if (matches && matches.length > 1) {
+        return {
+          error:
+            "Trovati più clienti con gli stessi dati (P.IVA/codice fiscale): correggi l'anagrafica dalla sezione Clienti.",
+        };
+      }
+    }
+  }
+
+  if (targetId) {
+    const { error } = await supabase.from("customers").update(row).eq("id", targetId);
+    if (error) return { error: "Errore aggiornamento anagrafica: " + error.message };
+  } else {
+    const { error } = await supabase.from("customers").insert(row);
+    if (error) return { error: "Errore salvataggio anagrafica: " + error.message };
+  }
+
+  revalidatePath("/nuovo-ordine");
+  revalidatePath("/clienti");
+  return { ok: true };
+}
+
 export type SubmitOrderPayload = {
   cliente: {
     ragione_sociale: string;
