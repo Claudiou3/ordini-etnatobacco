@@ -2,20 +2,20 @@
 
 import { useState } from "react";
 import { deleteLogoAction, uploadLogoAction } from "./actions";
-import type { LogoInfo } from "@/lib/logos";
+import type { LogoInfo, LogoPosition } from "@/lib/logos";
 
 /**
- * Sezione "Loghi" delle Impostazioni: due campi liberi per CARICARE,
- * SOSTITUIRE ed ELIMINARE il PRIMO logo (quello in alto) e il SECONDO
- * logo (sotto). Formati ammessi: JPG e PNG. Le immagini vengono
- * ridimensionate automaticamente alla misura del logo attuale.
+ * Sezione "Loghi" delle Impostazioni: tre campi per CARICARE, SOSTITUIRE
+ * ed ELIMINARE il PRIMO logo (in alto), il SECONDO logo (sotto) e l'ICONA
+ * "catalogo da scaricare" (l'icona che gli agenti vedranno sul telefono).
+ * Formati ammessi: JPG e PNG.
  */
 export function LogosForm({
   logos,
 }: {
-  logos: { logo1: LogoInfo; logo2: LogoInfo };
+  logos: { logo1: LogoInfo; logo2: LogoInfo; logo3: LogoInfo };
 }) {
-  const [busy, setBusy] = useState<1 | 2 | null>(null);
+  const [busy, setBusy] = useState<LogoPosition | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -23,7 +23,7 @@ export function LogosForm({
   // public/logo-detomaso.png non ha l'URL /logo-files/...).
   const logo1Custom = logos.logo1.src.startsWith("/logo-files/");
 
-  async function handleUpload(position: 1 | 2, file: File) {
+  async function handleUpload(position: LogoPosition, file: File) {
     setBusy(position);
     setError(null);
     setMessage(null);
@@ -32,31 +32,23 @@ export function LogosForm({
     const res = await uploadLogoAction(position, formData);
     if (!res.ok) {
       setError(
-        `Errore nel caricamento del logo ${
-          position === 1 ? "1" : "2"
-        }: ${res.error ?? "riprova."}`
+        `Errore nel caricamento (${labelOf(position)}): ${res.error ?? "riprova."}`
       );
     } else {
       setMessage(
-        `Logo ${position === 1 ? "1" : "2"} ${
+        `${labelOf(position)} ${
           position === 1 && !logo1Custom ? "caricato" : "sostituito"
         }. Ricarico la pagina…`
       );
       // Ricarica COMPLETA della pagina: garantisce che sidebar, login e
-      // anteprime mostrino subito l'immagine nuova (aggira eventuali
-      // versioni vecchie tenute in memoria dal browser).
+      // anteprime mostrino subito l'immagine nuova.
       window.setTimeout(() => window.location.reload(), 600);
     }
     setBusy(null);
   }
 
-  async function handleDelete(position: 1 | 2) {
-    const isFirst = position === 1;
-    const ok = window.confirm(
-      isFirst
-        ? "Eliminare il primo logo caricato? Verrà ripristinato il logo originale."
-        : "Eliminare il secondo logo? Non comparirà più sotto il primo."
-    );
+  async function handleDelete(position: LogoPosition) {
+    const ok = window.confirm(confirmText(position));
     if (!ok) return;
     setBusy(position);
     setError(null);
@@ -64,37 +56,52 @@ export function LogosForm({
     const res = await deleteLogoAction(position);
     if (!res.ok) {
       setError(
-        `Errore durante l'eliminazione del logo ${
-          isFirst ? "1" : "2"
-        }: ${res.error ?? "riprova."}`
+        `Errore durante l'eliminazione (${labelOf(position)}): ${res.error ?? "riprova."}`
       );
     } else {
-      setMessage(
-        isFirst
-          ? "Primo logo eliminato: è stato ripristinato il logo originale. Ricarico la pagina…"
-          : "Secondo logo eliminato. Ricarico la pagina…"
-      );
+      setMessage(`${labelOf(position)} eliminato. Ricarico la pagina…`);
       window.setTimeout(() => window.location.reload(), 600);
     }
     setBusy(null);
   }
 
-  function renderRow(position: 1 | 2, label: string, info: LogoInfo) {
+  function labelOf(position: LogoPosition): string {
+    if (position === 1) return "Primo logo";
+    if (position === 2) return "Secondo logo";
+    return "Logo catalogo da scaricare";
+  }
+
+  function confirmText(position: LogoPosition): string {
+    if (position === 1) {
+      return "Eliminare il primo logo caricato? Verrà ripristinato il logo originale.";
+    }
+    if (position === 2) {
+      return "Eliminare il secondo logo? Non comparirà più sotto il primo.";
+    }
+    return "Eliminare l'icona del catalogo? Sul dispositivo resterà il logo precedente fino a nuova installazione.";
+  }
+
+  function renderRow(position: LogoPosition, info: LogoInfo) {
     const fileId = `logo-file-${position}`;
-    const canDelete = position === 2 ? info.present : logo1Custom;
+    const canDelete =
+      position === 1 ? logo1Custom : info.present;
     const pickerText = info.present ? "Sostituisci…" : "Carica…";
+    const help =
+      position === 3
+        ? "PNG/JPG quadrato (consigliato 512x512) · sarà l'icona sul telefono/tablet"
+        : "JPG o PNG · max 8 MB · ridimensionato automaticamente";
     return (
       <div className="logo-row">
         <div className="logo-preview" aria-hidden="true">
           {info.present ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={info.src} alt={label} />
+            <img src={info.src} alt={labelOf(position)} />
           ) : (
             <span className="logo-empty">Nessun logo</span>
           )}
         </div>
         <div className="logo-upload">
-          <span className="form-label">{label}</span>
+          <span className="form-label">{labelOf(position)}</span>
           <div className="logo-actions">
             <label className="logo-file-field">
               <input
@@ -121,9 +128,7 @@ export function LogosForm({
               </button>
             )}
           </div>
-          <span className="settings-help">
-            JPG o PNG · max 8 MB · ridimensionato automaticamente
-          </span>
+          <span className="settings-help">{help}</span>
           {busy === position && (
             <span className="logo-busy">
               {info.present ? "Sostituzione in corso…" : "Caricamento in corso…"}
@@ -137,15 +142,15 @@ export function LogosForm({
   return (
     <div>
       <p className="settings-help">
-        Il primo logo è quello attualmente visibile in alto; il secondo compare
-        sotto di esso. Scegliendo un nuovo file il logo viene{" "}
-        <strong>sostituito</strong>; con il pulsante puoi <strong>eliminarlo</strong>{" "}
-        (per il primo logo torna quello originale). Le immagini più grandi
-        vengono riadattate automaticamente alla misura del logo attuale.
+        Il primo logo è quello visibile in alto; il secondo compare sotto.
+        Il <strong>Logo catalogo da scaricare</strong> è l&apos;icona che
+        compare sul telefono/tablet quando un agente salva l&apos;app con il
+        pulsante &quot;Scarica il catalogo&quot;.
       </p>
 
-      {renderRow(1, "Primo logo", logos.logo1)}
-      {renderRow(2, "Secondo logo", logos.logo2)}
+      {renderRow(1, logos.logo1)}
+      {renderRow(2, logos.logo2)}
+      {renderRow(3, logos.logo3)}
 
       {error && (
         <p className="form-error" role="alert">
@@ -156,4 +161,3 @@ export function LogosForm({
     </div>
   );
 }
-

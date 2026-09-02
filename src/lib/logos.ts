@@ -25,9 +25,7 @@ const CONFIG_FILE = appDataPath("logos.json");
 const LOGOS_PREFIX = "logos";
 const LOGOS_CONFIG_SETTING_KEY = "logos_config";
 
-/** Misura di riferimento = formato in cui vengono normalizzati i loghi. */
-const MAX_WIDTH = 200;
-const MAX_HEIGHT = 200;
+/** Misura standard: loghi pagina normalizzati a 200x200, icona app 512x512. */
 
 export type LogoInfo = {
   /** URL pubblico (con cache-busting) oppure stringa vuota se assente. */
@@ -35,18 +33,22 @@ export type LogoInfo = {
   present: boolean;
 };
 
+/** Posizioni logo: 1 e 2 = loghi della piattaforma, 3 = icona app (catalogo). */
+export type LogoPosition = 1 | 2 | 3;
+
 type LogosConfig = {
   logo1?: { updatedAt: string };
   logo2?: { updatedAt: string };
+  logo3?: { updatedAt: string };
 };
 
-function logoStorageKey(position: 1 | 2): string {
+function logoStorageKey(position: LogoPosition): string {
   return `${LOGOS_PREFIX}/logo-${position}.png`;
 }
 
 /** Metadati del logo su Storage, se presente. */
 async function storageLogoInfo(
-  position: 1 | 2
+  position: LogoPosition
 ): Promise<{ updatedAt: string } | null> {
   const supabase = await createAdminClient();
   if (!supabase) return null;
@@ -59,7 +61,7 @@ async function storageLogoInfo(
   return { updatedAt: item.updated_at ?? new Date().toISOString() };
 }
 
-async function downloadLogoFile(position: 1 | 2): Promise<Buffer | null> {
+async function downloadLogoFile(position: LogoPosition): Promise<Buffer | null> {
   const supabase = await createAdminClient();
   if (!supabase) return null;
   const { data, error } = await supabase.storage
@@ -73,7 +75,7 @@ async function downloadLogoFile(position: 1 | 2): Promise<Buffer | null> {
   }
 }
 
-async function uploadLogoFile(position: 1 | 2, buffer: Buffer): Promise<boolean> {
+async function uploadLogoFile(position: LogoPosition, buffer: Buffer): Promise<boolean> {
   const supabase = await createAdminClient();
   if (!supabase) return false;
   const { error } = await supabase.storage.from(ORDERS_BUCKET).upload(
@@ -84,7 +86,7 @@ async function uploadLogoFile(position: 1 | 2, buffer: Buffer): Promise<boolean>
   return !error;
 }
 
-async function removeLogoFile(position: 1 | 2): Promise<boolean> {
+async function removeLogoFile(position: LogoPosition): Promise<boolean> {
   const supabase = await createAdminClient();
   if (!supabase) return false;
   const { error } = await supabase.storage
@@ -112,7 +114,7 @@ async function writeConfig(config: LogosConfig): Promise<void> {
 }
 
 async function localLogoInfo(
-  position: 1 | 2,
+  position: LogoPosition,
   config: LogosConfig
 ): Promise<LogoInfo> {
   const file = path.join(LOGOS_DIR, `logo-${position}.png`);
@@ -130,8 +132,9 @@ async function localLogoInfo(
 
 /** PNG di un logo per la rotta /logo-files/[file]: Storage prima, poi locale. */
 export async function readLogoFile(file: string): Promise<Buffer | null> {
-  if (!/^logo-[12]\.png$/.test(file)) return null;
-  const position: 1 | 2 = file === "logo-1.png" ? 1 : 2;
+  if (!/^logo-[123]\.png$/.test(file)) return null;
+  const position: LogoPosition =
+    file === "logo-1.png" ? 1 : file === "logo-2.png" ? 2 : 3;
   const remote = await downloadLogoFile(position);
   if (remote) return remote;
   try {
@@ -142,12 +145,12 @@ export async function readLogoFile(file: string): Promise<Buffer | null> {
 }
 
 /**
- * Elimina il logo caricato nella posizione indicata (1 o 2).
+ * Elimina il logo caricato nella posizione indicata (1, 2 o 3).
  * Per il primo logo si torna automaticamente a quello originale
- * (public/logo-detomaso.png); per il secondo sparisce del tutto.
+ * (public/logo-detomaso.png); per il secondo/terzo sparisce del tutto.
  */
 export async function deleteUploadedLogo(
-  position: 1 | 2
+  position: LogoPosition
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const removed = await removeLogoFile(position);
   if (removed) {
@@ -167,14 +170,16 @@ export async function deleteUploadedLogo(
   }
 }
 
-/** Logo 1 (in alto) + logo 2 (sotto). Logo 1 usa il default finche' non cambia. */
+/** Logo 1 (in alto) + logo 2 (sotto) + logo 3 (icona app catalogo). */
 export async function getLogos(): Promise<{
   logo1: LogoInfo;
   logo2: LogoInfo;
+  logo3: LogoInfo;
 }> {
   const config = await readConfig();
   const storage1 = await storageLogoInfo(1);
   const storage2 = await storageLogoInfo(2);
+  const storage3 = await storageLogoInfo(3);
   const logo1 =
     storage1 !== null
       ? {
@@ -189,11 +194,19 @@ export async function getLogos(): Promise<{
           present: true,
         }
       : await localLogoInfo(2, config);
+  const logo3 =
+    storage3 !== null
+      ? {
+          src: `/logo-files/logo-3.png?v=${encodeURIComponent(storage3.updatedAt)}`,
+          present: true,
+        }
+      : await localLogoInfo(3, config);
   return {
     logo1: logo1.present
       ? logo1
       : { src: "/logo-detomaso.png", present: true },
     logo2,
+    logo3,
   };
 }
 
@@ -204,7 +217,7 @@ export async function getLogos(): Promise<{
  * Storage; in locale in public/logos/.
  */
 export async function saveUploadedLogo(
-  position: 1 | 2,
+  position: LogoPosition,
   input: Buffer
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   let output: Buffer;
@@ -215,16 +228,17 @@ export async function saveUploadedLogo(
       return { ok: false, error: "Formato non valido: usa solo JPG o PNG." };
     }
 
-    // Entrambi i loghi vengono normalizzati allo STESSO formato esatto
-    // 200x200 (con trasparenza attorno, se le proporzioni differiscono):
-    // cosi' in pagina hanno sempre lo stesso ingombro massimo.
+    // Loghi 1 e 2: normalizzati a 200x200 (stesso ingombro in pagina).
+    // Logo 3 (icona app/catalogo): normalizzato a 512x512 quadrato.
+    const isIcon = position === 3;
+    const size = isIcon ? 512 : 200;
     output = await image
       .resize({
-        width: MAX_WIDTH,
-        height: MAX_HEIGHT,
-        fit: "contain",
+        width: size,
+        height: size,
+        fit: isIcon ? "cover" : "contain",
         position: "centre",
-        background: { r: 0, g: 0, b: 0, alpha: 0 },
+        background: { r: 255, g: 255, b: 255, alpha: isIcon ? 1 : 0 },
       })
       .png()
       .toBuffer();

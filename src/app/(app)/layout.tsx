@@ -4,6 +4,7 @@ import { initials } from "@/lib/format";
 import { getLogos } from "@/lib/logos";
 import { AppNav } from "./nav";
 import { ScrollNav } from "./scroll-nav";
+import { DownloadCatalogButton } from "./download-catalog-button";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </div>
         <AppNav isAdmin={Boolean(admin)} />
+        {!admin && (
+          <DownloadCatalogButton iconUrl={logos.logo3.src || undefined} />
+        )}
         <div className="sidebar-footer">
           <span className="status-dot" aria-hidden="true" />
           <span>{admin ? "Amministratore" : agent.email}</span>

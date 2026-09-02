@@ -11,6 +11,7 @@ import { saveEmailConfig } from "@/lib/email/config";
 import {
   deleteUploadedLogo,
   saveUploadedLogo,
+  type LogoPosition,
 } from "@/lib/logos";
 import {
   parseAnagraficaFromWorkbook,
@@ -196,18 +197,19 @@ export type LogoUploadState = { ok?: boolean; error?: string };
 
 /**
  * Carica/sostituisce un logo della piattaforma (1 = primo logo in alto,
- * 2 = secondo logo sotto). Formati ammessi: JPG e PNG; le immagini vengono
- * ridimensionate automaticamente alla misura del logo attuale.
+ * 2 = secondo logo sotto, 3 = icona app/catalogo da scaricare).
+ * Formati ammessi: JPG e PNG; le immagini vengono ridimensionate
+ * automaticamente alla misura giusta.
  */
 export async function uploadLogoAction(
-  position: 1 | 2,
+  position: LogoPosition,
   formData: FormData
 ): Promise<LogoUploadState> {
   const admin = await getCurrentAdmin();
   if (!admin || admin.subAdmin) {
     return { error: "Operazione riservata all'amministratore." };
   }
-  if (position !== 1 && position !== 2) {
+  if (position !== 1 && position !== 2 && position !== 3) {
     return { error: "Posizione logo non valida." };
   }
 
@@ -235,17 +237,18 @@ export async function uploadLogoAction(
 
 
 /**
- * Elimina un logo della piattaforma (1 = primo logo in alto, 2 = secondo).
- * Per il primo logo si torna al logo originale; il secondo sparisce.
+ * Elimina un logo della piattaforma (1 = primo logo in alto, 2 = secondo,
+ * 3 = icona app). Per il primo logo si torna al logo originale; gli altri
+ * spariscono.
  */
 export async function deleteLogoAction(
-  position: 1 | 2
+  position: LogoPosition
 ): Promise<LogoUploadState> {
   const admin = await getCurrentAdmin();
   if (!admin || admin.subAdmin) {
     return { error: "Operazione riservata all'amministratore." };
   }
-  if (position !== 1 && position !== 2) {
+  if (position !== 1 && position !== 2 && position !== 3) {
     return { error: "Posizione logo non valida." };
   }
 
