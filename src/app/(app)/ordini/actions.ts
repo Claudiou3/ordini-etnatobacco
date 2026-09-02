@@ -8,6 +8,7 @@ import {
 import { getDataClient } from "@/lib/supabase/data";
 import { isSupabaseConfigured } from "@/lib/settings/runtime";
 import { getOrderDetail } from "@/lib/orders";
+import { markOrderRead } from "@/lib/orders/read";
 import {
   fileDeleteOrder,
   fileCancelOrder,
@@ -140,6 +141,31 @@ export async function cancelOrderAction(
   revalidatePath("/console");
   revalidatePath("/agenti");
   return { success: true, orderId };
+}
+
+export type ConfirmOrderState = {
+  error?: string;
+  success?: boolean;
+};
+
+/**
+ * Conferma un ordine appena arrivato (solo amministratore PRINCIPALE):
+ * lo sposta da "Non Confermati" a "Confermati". L'apertura dell'ordine
+ * da sola NON basta piu': serve questo passaggio esplicito.
+ */
+export async function confirmOrderAction(
+  orderId: string
+): Promise<ConfirmOrderState> {
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+
+  await markOrderRead(orderId);
+
+  revalidatePath("/ordini");
+  revalidatePath("/console");
+  return { success: true };
 }
 
 /**

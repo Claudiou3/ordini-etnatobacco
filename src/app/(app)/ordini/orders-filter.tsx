@@ -29,6 +29,10 @@ export function OrdersFilter({
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  // Lato amministratore: filtro Confermati / Non Confermati (menu a tendina).
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "confirmed" | "unconfirmed"
+  >("all");
   const [showAll, setShowAll] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   // Ordine in attesa di conferma eliminazione (modale "Sei certo…?").
@@ -105,13 +109,29 @@ export function OrdersFilter({
       }
       if (dateFrom && o.data_ordine < dateFrom) return false;
       if (dateTo && o.data_ordine > dateTo) return false;
+      // Lato amministratore: stato Confermato / Non Confermato.
+      if (isAdmin && typeof o.read === "boolean") {
+        if (statusFilter === "confirmed" && !o.read) return false;
+        if (statusFilter === "unconfirmed" && o.read) return false;
+      }
       return true;
     });
     // Ordine di ARRIVO: l'ultimo ordine trasmesso e' il primo della lista.
     return sortOrdersByArrival(filtered);
-  }, [orders, search, dateFrom, dateTo]);
+  }, [orders, search, dateFrom, dateTo, isAdmin, statusFilter]);
 
-  const visible = showAll ? filtered : filtered.slice(0, 10);
+  // Amministratore: la tendina decide cosa mostrare.
+  // Agente: comportamento storico (recenti / Vedi tutti).
+  const visible = isAdmin ? filtered : showAll ? filtered : filtered.slice(0, 10);
+  const listHeading = isAdmin
+    ? statusFilter === "confirmed"
+      ? "Ordini confermati"
+      : statusFilter === "unconfirmed"
+        ? "Ordini non confermati"
+        : "Tutti gli ordini"
+    : showAll
+      ? "Tutti gli ordini"
+      : "Ordini recenti";
 
   return (
     <>
@@ -159,13 +179,32 @@ export function OrdersFilter({
         </div>
 
         <div className="form-actions">
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => setShowAll((value) => !value)}
-          >
-            {showAll ? "Mostra solo i più recenti" : "Vedi tutti"}
-          </button>
+          {isAdmin ? (
+            <label className="orders-status-filter">
+              <span className="form-label">Mostra ordini</span>
+              <select
+                value={statusFilter}
+                onChange={(e) =>
+                  setStatusFilter(
+                    e.target.value as "all" | "confirmed" | "unconfirmed"
+                  )
+                }
+                className="form-input"
+              >
+                <option value="all">Tutti - Confermati e Non</option>
+                <option value="confirmed">Confermati</option>
+                <option value="unconfirmed">Non Confermati</option>
+              </select>
+            </label>
+          ) : (
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => setShowAll((value) => !value)}
+            >
+              {showAll ? "Mostra solo i più recenti" : "Vedi tutti"}
+            </button>
+          )}
         </div>
       </section>
 
@@ -173,7 +212,7 @@ export function OrdersFilter({
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Elenco ordini</p>
-            <h2>{showAll ? "Tutti gli ordini" : "Ordini recenti"}</h2>
+            <h2>{listHeading}</h2>
           </div>
           <span className="count-badge">{filtered.length} ordini</span>
         </div>

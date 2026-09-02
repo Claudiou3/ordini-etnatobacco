@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentAgent, getCurrentAdmin } from "@/lib/supabase/session";
 import { getOrderDetail } from "@/lib/orders";
-import { markOrderRead } from "@/lib/orders/read";
+import { getReadOrderIds } from "@/lib/orders/read";
 import { formatEur, formatDate } from "@/lib/format";
 import { PrintTrigger } from "../print-trigger";
 import { OrderCancelControl } from "../order-cancel-control";
+import { ConfirmOrderButton } from "../confirm-order-button";
 
 export const dynamic = "force-dynamic";
 
@@ -25,14 +26,13 @@ export default async function OrderDetailPage({
   const detail = await getOrderDetail(id, agent.id);
   if (!detail) notFound();
 
-  // L'amministratore che apre l'ordine lo marca come "letto":
-  // nell'elenco ordini tornerà bianco (non più evidenziato in rosso).
-  if (await getCurrentAdmin()) {
-    await markOrderRead(id);
-  }
-
   const { order, items } = detail;
   const admin = await getCurrentAdmin();
+  // "Confermato" = ordine che l'amministratore ha confermato esplicitamente
+  // (pulsante "Confermato"). Aprire l'ordine NON basta piu'.
+  const readSet = await getReadOrderIds();
+  const confirmed = readSet.has(order.id);
+  const canConfirm = Boolean(admin && !admin.subAdmin);
   const isCancelled = order.stato === "annullato";
   const cliente = order.customers?.ragione_sociale ?? "Cliente sconosciuto";
 
@@ -161,6 +161,22 @@ export default async function OrderDetailPage({
           </div>
         </dl>
       </section>
+
+      {canConfirm && (
+        <section className="content-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Conferma ordine</p>
+              <h2>
+                {confirmed
+                  ? "Ordine confermato"
+                  : "Ordine non ancora confermato"}
+              </h2>
+            </div>
+          </div>
+          <ConfirmOrderButton orderId={order.id} confirmed={confirmed} />
+        </section>
+      )}
     </>
   );
 }
