@@ -11,7 +11,12 @@ import { CustomerCard } from "./customer-card";
  * ragione sociale, P.IVA, codice fiscale o citta', i risultati compaiono
  * subito sotto, senza bisogno di premere "Cerca" o ricaricare la pagina.
  */
-export function CustomerSearch() {
+export function CustomerSearch({
+  canDelete = false,
+}: {
+  /** Il pulsante "Elimina" (in ogni card) e' riservato all'amministratore. */
+  canDelete?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Customer[]>([]);
   const [searching, setSearching] = useState(false);
@@ -115,7 +120,11 @@ export function CustomerSearch() {
           </p>
           <div className="customer-list">
             {results.map((customer) => (
-              <CustomerCard key={customer.id} customer={customer} />
+              <CustomerCard
+                key={customer.id}
+                customer={customer}
+                canDelete={canDelete}
+              />
             ))}
           </div>
         </>

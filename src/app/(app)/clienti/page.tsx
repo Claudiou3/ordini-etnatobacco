@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/supabase/session";
+import { getCurrentAdmin, getSessionUser } from "@/lib/supabase/session";
 import { CustomerSearch } from "./customer-search";
 import { CustomerForm } from "./customer-form";
 
@@ -8,6 +8,11 @@ export const dynamic = "force-dynamic";
 export default async function ClientiPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
+
+  // Solo l'amministratore principale puo' eliminare anagrafiche:
+  // gli agenti vedono la ricerca e la modifica, ma non il pulsante "Elimina".
+  const admin = await getCurrentAdmin();
+  const canDelete = Boolean(admin && !admin.subAdmin);
 
   return (
     <>
@@ -31,7 +36,7 @@ export default async function ClientiPage() {
           </div>
         </div>
 
-        <CustomerSearch />
+        <CustomerSearch canDelete={canDelete} />
       </section>
 
       <section className="content-panel">

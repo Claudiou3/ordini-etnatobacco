@@ -11,7 +11,14 @@ import { DeleteCustomerButton } from "./delete-customer-button";
  * soprattutto su smartphone/tablet dove la zona toccabile del pulsante
  * "Modifica" e' troppo piccola).
  */
-export function CustomerCard({ customer }: { customer: Customer }) {
+export function CustomerCard({
+  customer,
+  canDelete = false,
+}: {
+  customer: Customer;
+  /** Mostra il pulsante "Elimina" solo all'amministratore (default: nascosto). */
+  canDelete?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -88,10 +95,12 @@ export function CustomerCard({ customer }: { customer: Customer }) {
         >
           Modifica
         </button>
-        <DeleteCustomerButton
-          id={customer.id}
-          nome={customer.ragione_sociale}
-        />
+        {canDelete && (
+          <DeleteCustomerButton
+            id={customer.id}
+            nome={customer.ragione_sociale}
+          />
+        )}
       </div>
 
       {open && (
