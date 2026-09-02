@@ -86,7 +86,32 @@ function toDbRow(rec: AnagraficaRecord) {
   };
 }
 
-const BATCH = 200;
+const BATCH = 500;
+const CONCURRENCY = 8;
+
+/** Esegue i lotti con piu' richieste in parallelo (limite di concorrenza). */
+async function runPool<T>(
+  items: T[],
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  if (items.length === 0) return;
+  let next = 0;
+  let firstError: unknown = null;
+  async function loop(): Promise<void> {
+    while (next < items.length) {
+      const idx = next++;
+      try {
+        await worker(items[idx]);
+      } catch (err) {
+        if (!firstError) firstError = err;
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, items.length) }, () => loop())
+  );
+  if (firstError) throw firstError;
+}
 
 export type ImportResult = { inserted: number; updated: number; skipped: number };
 
@@ -151,12 +176,15 @@ export async function importAnagrafica(
   }
 
   let inserted = 0;
+  const insertChunks: ReturnType<typeof toDbRow>[][] = [];
   for (let i = 0; i < toInsert.length; i += BATCH) {
-    const chunk = toInsert.slice(i, i + BATCH);
+    insertChunks.push(toInsert.slice(i, i + BATCH));
+  }
+  await runPool(insertChunks, async (chunk) => {
     const { error } = await client.from("customers").insert(chunk);
     if (!error) {
       inserted += chunk.length;
-      continue;
+      return;
     }
     if (error.code !== "23505") throw new Error("Inserimento: " + error.message);
     for (const rec of chunk) {
@@ -164,17 +192,20 @@ export async function importAnagrafica(
       if (!e2) inserted++;
       else if (e2.code !== "23505") throw new Error("Inserimento: " + e2.message);
     }
-  }
+  });
 
   let updated = 0;
+  const updateChunks: { id: string; data: ReturnType<typeof toDbRow> }[][] = [];
   for (let i = 0; i < toUpdate.length; i += BATCH) {
-    const chunk = toUpdate.slice(i, i + BATCH);
+    updateChunks.push(toUpdate.slice(i, i + BATCH));
+  }
+  await runPool(updateChunks, async (chunk) => {
     const { error } = await client
       .from("customers")
       .upsert(chunk.map((u) => ({ id: u.id, ...u.data })), { onConflict: "id" });
     if (!error) {
       updated += chunk.length;
-      continue;
+      return;
     }
     if (error.code !== "23505") throw new Error("Aggiornamento: " + error.message);
     for (const u of chunk) {
@@ -184,7 +215,7 @@ export async function importAnagrafica(
       if (!e2) updated++;
       else if (e2.code !== "23505") throw new Error("Aggiornamento: " + e2.message);
     }
-  }
+  });
 
   return { inserted, updated, skipped };
 }

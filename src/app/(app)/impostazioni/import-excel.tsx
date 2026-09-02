@@ -66,7 +66,9 @@ export function ImportExcel() {
           disabled={pending}
         />
         <button className="primary-button table-button" type="submit" disabled={pending}>
-          {pending ? "Importazione in corso…" : "Carica e importa"}
+          {pending
+            ? "Importazione in corso… (1-2 min, non chiudere la pagina)"
+            : "Carica e importa"}
         </button>
       </form>
 

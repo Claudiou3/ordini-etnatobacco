@@ -15,6 +15,9 @@ import { AdminCredentialsPanel } from "../console/admin-credentials-panel";
 import { LogoutButton } from "../logout-button";
 
 export const dynamic = "force-dynamic";
+// L'import dell'anagrafica (11k+ clienti) può superare i 10 secondi default:
+// consenti alla funzione di girare fino a 60s (limite massimo del piano Hobby).
+export const maxDuration = 60;
 
 export default async function ImpostazioniPage() {
   const admin = await getCurrentAdmin();
