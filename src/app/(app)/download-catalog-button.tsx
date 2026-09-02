@@ -71,20 +71,20 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
   const stepsContent: Record<"ios" | "android" | "desktop", ReactNode> = {
     ios: (
       <>
-        <p className="settings-help">
-          <strong>iPhone / iPad (Safari):</strong>
-        </p>
+        <p className="install-step-title">iPhone / iPad (Safari)</p>
         <ol className="install-steps">
-          <li>Apri il sito in Safari</li>
           <li>
-            Tocca <strong>Condividi</strong> (in basso, quadrato con freccia
-            verso l&apos;alto)
+            Guarda <strong>in basso al centro</strong> di Safari: c&apos;è il
+            pulsante <strong>Condividi</strong> (quadrato con freccia verso
+            l&apos;alto)
           </li>
           <li>
-            Scorri e scegli <strong>&quot;Aggiungi a Home&quot;</strong>
+            Toccato quello, scegli{" "}
+            <strong>&quot;Aggiungi a Home&quot;</strong>
           </li>
           <li>
-            Premi <strong>&quot;Aggiungi&quot;</strong>: icona sulla Home
+            Premi <strong>&quot;Aggiungi&quot;</strong>: ora l&apos;icona del
+            catalogo è sulla Home
           </li>
         </ol>
       </>
@@ -92,37 +92,48 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
     // STEPS_ANDROID
     android: (
       <>
-        <p className="settings-help">
-          <strong>Android (Chrome):</strong>
-        </p>
+        <p className="install-step-title">Android (Chrome)</p>
         <ol className="install-steps">
-          <li>Tocca il menu ⋮ (in alto a destra)</li>
+          <li>
+            In <strong>alto a destra</strong> di Chrome tocca i{" "}
+            <strong>tre puntini ⋮</strong>
+          </li>
           <li>
             Scegli <strong>&quot;Aggiungi a schermata Home&quot;</strong>{" "}
-            oppure <strong>&quot;Installa app&quot;</strong>
+            (oppure <strong>&quot;Installa app&quot;</strong>)
           </li>
-          <li>Conferma: l&apos;icona apparirà sulla Home</li>
+          <li>
+            Tocca <strong>&quot;Aggiungi&quot;</strong>: ora l&apos;icona del
+            catalogo è sulla Home
+          </li>
         </ol>
       </>
     ),
     desktop: (
       <>
-        <p className="settings-help">
-          <strong>PC (Windows/Mac):</strong>
-        </p>
+        <p className="install-step-title">PC (Windows / Mac)</p>
         <ol className="install-steps">
-          <li>Usa Chrome o Edge</li>
           <li>
-            Clicca l&apos;icona <strong>&quot;Installa&quot;</strong> nella
-            barra degli indirizzi (monitor con freccia) oppure{" "}
-            <strong>⋮ → Installa &quot;IOI Orders&quot;</strong>
+            Apri il sito con <strong>Chrome</strong> o <strong>Edge</strong>
           </li>
           <li>
-            Conferma: icona sul desktop / menu Start che apre l&apos;app
+            Guarda in <strong>alto a destra, nella barra degli indirizzi</strong>:
+            c&apos;è una piccola icona (un <strong>monitor con la
+            freccia</strong>). Cliccala e premi <strong>&quot;Installa&quot;</strong>
+          </li>
+          <li>
+            Se non la vedi, clicca i <strong>tre puntini ⋮</strong> (in alto a
+            destra) → <strong>&quot;Installa IOI Orders…&quot;</strong>
+          </li>
+          <li>
+            Fatto: ora sul desktop / menu Start c&apos;è l&apos;icona che apre
+            il catalogo
           </li>
         </ol>
-        <p className="settings-help">
-          In alternativa aggiungi il sito ai <strong>preferiti</strong>.
+        <p className="install-note">
+          In alternativa puoi aggiungere il sito ai <strong>preferiti</strong>{" "}
+          (Ctrl+D): non crea l&apos;icona dedicata ma resta a un clic di
+          distanza.
         </p>
       </>
     ),
@@ -161,9 +172,11 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
 
           <div className="install-content">
             <p>
-              L&apos;app si installa su <strong>Android</strong>,{" "}
-              <strong>iPhone/iPad</strong> e <strong>PC</strong>: l&apos;icona
-              resta sul dispositivo e apre subito l&apos;applicazione.
+              <strong>Come funziona:</strong> non si scarica nessun file. Il
+              pulsante &quot;Scarica il catalogo&quot; ti dice dove cliccare
+              nel <strong>browser</strong> per creare l&apos;icona sul
+              dispositivo. Funziona su <strong>Android</strong>,{" "}
+              <strong>iPhone/iPad</strong> e <strong>PC</strong>.
             </p>
 
             {iconUrl ? (
