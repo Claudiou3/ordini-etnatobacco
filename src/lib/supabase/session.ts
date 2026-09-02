@@ -208,4 +208,13 @@ export function isFullAdmin(admin: AdminSession | null): boolean {
   return Boolean(admin && !admin.subAdmin);
 }
 
+/**
+ * TRUE SOLO per la sessione dell'Amministratore principale (l'account che
+ * gestisce Consolle/Impostazioni), NON per agenti con ruolo admin su Supabase.
+ * Usata per le operazioni riservate, es. eliminare un'anagrafica cliente.
+ */
+export async function isPrimaryAdmin(): Promise<boolean> {
+  return Boolean(await getAdminEmailFromSession());
+}
+
 

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getDataClient } from "@/lib/supabase/data";
-import { getCurrentAdmin, getSessionUser } from "@/lib/supabase/session";
+import { getCurrentAdmin, getSessionUser, isPrimaryAdmin } from "@/lib/supabase/session";
 import { searchCustomers } from "@/lib/customers";
 import type { Customer } from "@/lib/types";
 import { isSupabaseConfigured } from "@/lib/settings/runtime";
@@ -189,10 +189,9 @@ export async function updateCustomer(
 }
 
 export async function deleteCustomer(formData: FormData): Promise<void> {
-  // Eliminare un'anagrafica e' consentito SOLO all'amministratore principale:
+  // Eliminare un'anagrafica e' consentito SOLO all'Amministratore principale:
   // gli agenti e i sub-amministratori non possono cancellare clienti.
-  const admin = await getCurrentAdmin();
-  if (!admin || admin.subAdmin) return;
+  if (!(await isPrimaryAdmin())) return;
 
   const id = String(formData.get("id") ?? "");
   if (!id) return;
