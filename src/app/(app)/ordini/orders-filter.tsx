@@ -29,9 +29,9 @@ export function OrdersFilter({
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  // Lato amministratore: filtro Confermati / Non Confermati (menu a tendina).
+  // Lato amministratore: filtro Confermati / Non Confermati / Eliminati.
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "confirmed" | "unconfirmed"
+    "all" | "confirmed" | "unconfirmed" | "deleted"
   >("all");
   const [showAll, setShowAll] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -109,7 +109,10 @@ export function OrdersFilter({
       }
       if (dateFrom && o.data_ordine < dateFrom) return false;
       if (dateTo && o.data_ordine > dateTo) return false;
-      // Lato amministratore: stato Confermato / Non Confermato.
+      // Lato amministratore: stato Confermato / Non Confermato / Eliminato.
+      if (statusFilter === "deleted") {
+        return o.stato === "annullato";
+      }
       if (isAdmin && typeof o.read === "boolean") {
         if (statusFilter === "confirmed" && !o.read) return false;
         if (statusFilter === "unconfirmed" && o.read) return false;
@@ -128,7 +131,9 @@ export function OrdersFilter({
       ? "Ordini confermati"
       : statusFilter === "unconfirmed"
         ? "Ordini non confermati"
-        : "Tutti gli ordini"
+        : statusFilter === "deleted"
+          ? "Ordini eliminati"
+          : "Tutti gli ordini"
     : showAll
       ? "Tutti gli ordini"
       : "Ordini recenti";
@@ -186,7 +191,11 @@ export function OrdersFilter({
                 value={statusFilter}
                 onChange={(e) =>
                   setStatusFilter(
-                    e.target.value as "all" | "confirmed" | "unconfirmed"
+                    e.target.value as
+                      | "all"
+                      | "confirmed"
+                      | "unconfirmed"
+                      | "deleted"
                   )
                 }
                 className="form-input"
@@ -194,6 +203,7 @@ export function OrdersFilter({
                 <option value="all">Tutti - Confermati e Non</option>
                 <option value="confirmed">Confermati</option>
                 <option value="unconfirmed">Non Confermati</option>
+                <option value="deleted">Eliminati</option>
               </select>
             </label>
           ) : (
