@@ -8,6 +8,10 @@ import {
 } from "@/lib/admin/store";
 import { getCurrentAdmin } from "@/lib/supabase/session";
 import { countUnreadAdminOrders } from "@/lib/orders";
+import {
+  deleteSubadmin,
+  upsertSubadmin,
+} from "@/lib/subadmin/store";
 
 /**
  * Numero di ordini non ancora letti dall'amministratore: usato dal pop-up
@@ -89,4 +93,48 @@ export async function updateAdminCredentialsAction(
     message:
       "Credenziali aggiornate. Accedi di nuovo con il nuovo utente e la nuova password.",
   };
+}
+
+export type SubadminActionState = {
+  error?: string;
+  success?: boolean;
+  slot?: number;
+};
+
+/**
+ * Crea o aggiorna uno dei 6 sub-amministratori (email + password).
+ * Se la password e' vuota viene mantenuta quella attuale (si modifica
+ * solo l'email). Solo l'amministratore principale puo' operare.
+ */
+export async function saveSubadminAction(
+  slot: number,
+  formData: FormData
+): Promise<SubadminActionState> {
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  const result = await upsertSubadmin(slot, email, password);
+  if (!result.ok) return { error: result.error };
+  return { success: true, slot };
+}
+
+/**
+ * Elimina (sgancia) uno dei 6 sub-amministratori: non potra' piu' accedere.
+ * Solo l'amministratore principale puo' operare.
+ */
+export async function deleteSubadminAction(
+  slot: number
+): Promise<SubadminActionState> {
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+
+  await deleteSubadmin(slot);
+  return { success: true, slot };
 }

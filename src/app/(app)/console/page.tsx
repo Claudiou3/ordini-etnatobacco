@@ -7,6 +7,8 @@ import { countUnreadAdminOrders } from "@/lib/orders";
 import { formatEur } from "@/lib/format";
 import { NewOrderPopup } from "./new-order-popup";
 import { AdminSettingsModal } from "./admin-settings-modal";
+import { UsersModal } from "./users-modal";
+import { listSubadmins } from "@/lib/subadmin/store";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +58,9 @@ export default async function ConsolePage() {
   const totalOrders = agents.reduce((sum, a) => sum + a.orders.length, 0);
   const totalImponibile = agents.reduce((sum, a) => sum + a.totale, 0);
   const discounted = items.filter((i) => i.sconto > 0).length;
+  // I sub-amministratori sono in sola lettura: la gestione degli utenti
+  // (Sub-amministratori) e' riservata all'amministratore principale.
+  const subadmins = admin.subAdmin ? [] : await listSubadmins();
 
   return (
     <>
@@ -66,11 +71,12 @@ export default async function ConsolePage() {
           <h1>Consolle di comando</h1>
           <p className="list-meta">
             Controllo completo della piattaforma: catalogo, prezzi, agenti,
-            ordini e impostazioni.
+            ordini, impostazioni e utenti.
           </p>
         </div>
         {!admin.subAdmin && (
           <div className="topbar-actions">
+            <UsersModal subadmins={subadmins} />
             <AdminSettingsModal />
           </div>
         )}

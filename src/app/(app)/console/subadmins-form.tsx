@@ -117,8 +117,8 @@ function SubadminRow({
 }
 
 /**
- * Sezione "Sub-amministratori" delle Impostazioni: 6 slot (email + password)
- * creati, modificati ed ELIMINATI dall'amministratore principale.
+ * Sezione "Sub-amministratori" della Consolle di comando: 6 slot (email +
+ * password) creati, modificati ed ELIMINATI dall'amministratore principale.
  */
 export function SubadminsForm({ subadmins }: { subadmins: SubadminView[] }) {
   const bySlot = new Map(subadmins.map((s) => [s.slot, s]));

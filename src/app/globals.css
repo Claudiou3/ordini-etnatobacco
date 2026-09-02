@@ -419,6 +419,8 @@ h2 { font-size: 21px; }
   color: var(--muted); display: grid; place-items: center; flex: none;
 }
 .modal-close:hover { background: #f1f5f9; color: var(--ink); }
+/* Modale "Utenti" della Consolle: sezione Sub-amministratori piu' larga */
+.users-modal-panel { max-width: 820px; }
 /* Gruppo sezioni nel modale "Impostazioni" della Consolle (credenziali admin) */
 .admin-cred-group {
   background: #f8fafc; border: 1px solid var(--line); border-radius: 10px;
