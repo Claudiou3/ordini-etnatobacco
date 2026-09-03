@@ -960,7 +960,8 @@ export function NewOrderForm({
                 giftGroups.find((grp) =>
                   grp.variants.some((g) => g.row === line.row)
                 ) ?? null;
-              const qtyInvalid = !isValidGiftQty(line.qty);
+              // Ogni articolo con la diottria selezionata vale SEMPRE 1 pezzo:
+              // l'eventuale errore quantità non esiste più (nessun input Qtà).
               return (
                 <div key={index} className="gift-line">
                   <div className="form-field gift-select">
@@ -1046,28 +1047,9 @@ export function NewOrderForm({
                   </div>
 
                   <div className="gift-line-row">
-                    <label className="form-field gift-qty">
-                      <span className="form-label">Qtà</span>
-                      <input
-                        className={`form-input${qtyInvalid ? " is-invalid" : ""}`}
-                        type="number"
-                        min={1}
-                        max={GIFT_MAX_QTY}
-                        value={line.qty}
-                        disabled={!variant}
-                        onChange={(e) =>
-                          updateGiftLine(index, {
-                            qty: Math.max(
-                              1,
-                              Math.min(
-                                GIFT_MAX_QTY,
-                                Math.floor(Number(e.target.value) || 0)
-                              )
-                            ),
-                          })
-                        }
-                      />
-                    </label>
+                    <span className="gift-qty-fixed" aria-label="Quantità">
+                      Qtà · 1 pezzo
+                    </span>
 
                     <button
                       type="button"

@@ -621,6 +621,13 @@ h2 { font-size: 21px; }
 
 /* Righe omaggio */
 .gift-lines { display: grid; gap: 12px; }
+/* Riga omaggio: ogni articolo/diottria selezionata vale 1 pezzo (niente input qtà) */
+.gift-qty-fixed {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 38px; padding: 0 14px; width: max-content;
+  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  font-weight: 700; font-size: 13px; color: var(--ink);
+}
 .gift-line {
   display: grid; gap: 12px; padding: 12px; border: 1px solid var(--line);
   border-radius: 10px; background: #f8fafc;

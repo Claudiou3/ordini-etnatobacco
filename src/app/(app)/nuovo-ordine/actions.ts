@@ -453,8 +453,10 @@ export async function submitOrder(
     if (!v) continue;
     const qty = Math.floor(g.qty) || 0;
     if (!isValidGiftQty(qty)) continue;
-    gifts.push({ v, qty });
-    giftTotal += qty;
+    // OMAGGIO: per ogni articolo con la diottria selezionata viene considerato
+    // SEMPRE 1 pezzo (anche se il prodotto è in confezione da 4: es. ricariche).
+    gifts.push({ v, qty: 1 });
+    giftTotal += 1;
   }
   if (gifts.length > 0 && !isValidGiftTotal(giftTotal)) {
     return {
