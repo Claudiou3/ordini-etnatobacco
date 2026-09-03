@@ -9,7 +9,7 @@ type InstallPromptEvent = Event & {
 };
 
 /**
- * Pulsante "SCARICA IL CATALOGO" nella barra laterale (lato agenti):
+ * Pulsante "SCARICA L'APP" nella barra laterale (lato agenti):
  * permette di aggiungere l'app alla Home/scrivania del dispositivo
  * (Android, iPhone/iPad e PC). Le istruzioni compaiono in un pannello
  * ancorato a DESTRA (non al centro), così non coprono i campi della pagina.
@@ -148,7 +148,7 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
           onClick={() => void handleClick()}
           title="Salva l'app sul dispositivo (icona sulla Home)"
         >
-          <span aria-hidden="true">📥</span> SCARICA IL CATALOGO
+          <span aria-hidden="true">📥</span> SCARICA L&apos;APP
         </button>
       </div>
 
@@ -171,14 +171,6 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
           </div>
 
           <div className="install-content">
-            <p>
-              <strong>Come funziona:</strong> non si scarica nessun file. Il
-              pulsante &quot;Scarica il catalogo&quot; ti dice dove cliccare
-              nel <strong>browser</strong> per creare l&apos;icona sul
-              dispositivo. Funziona su <strong>Android</strong>,{" "}
-              <strong>iPhone/iPad</strong> e <strong>PC</strong>.
-            </p>
-
             {iconUrl ? (
               <div className="install-icon-row">
                 <div className="install-icon-preview">
