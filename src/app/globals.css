@@ -58,8 +58,8 @@ button, input, select, textarea { font: inherit; }
 }
 .brand-logos { display: grid; gap: 8px; justify-items: center; width: 100%; }
 .brand-logo {
-  /* Scatola FISSA identica per entrambi i loghi (sidebar): 80x80. */
-  width: 80px; height: 80px;
+  /* Misura del logo regolabile dalle Impostazioni (--logo-size, default 80 px). */
+  width: var(--logo-size, 80px); height: var(--logo-size, 80px);
   object-fit: contain; object-position: center;
 }
 .brand-dot { width: 10px; height: 10px; background: var(--primary); border-radius: 50%; display: inline-block; margin-right: 8px; }
@@ -313,8 +313,9 @@ h2 { font-size: 21px; }
 .auth-subtitle { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
 .auth-logo { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 22px; }
 .auth-logo-img {
-  /* Scatola FISSA identica per entrambi i loghi: 150x150. */
-  width: 150px; height: 150px;
+  /* Login/registrazione: 1.875x la misura Impostazioni (default 80*1.875=150 px). */
+  width: calc(var(--logo-size, 80px) * 1.875);
+  height: calc(var(--logo-size, 80px) * 1.875);
   object-fit: contain; object-position: center;
 }
 .auth-switch { margin: 20px 0 0; font-size: 14px; color: var(--muted); text-align: center; }
@@ -955,11 +956,16 @@ h2 { font-size: 21px; }
 }
 .logo-row:last-of-type { border-bottom: 0; }
 .logo-preview {
-  width: 240px; height: 200px; flex: none; overflow: hidden;
+  flex: none; min-height: 180px; padding: 12px;
   border: 1px dashed #cbd5e1; border-radius: 10px; background: #f8fafc;
   display: grid; place-items: center;
 }
-.logo-preview img { width: 200px; height: 200px; object-fit: contain; object-position: center; }
+.logo-preview img {
+  /* Anteprima 2.5x la misura Impostazioni (default 80*2.5=200 px). */
+  width: calc(var(--logo-size, 80px) * 2.5);
+  height: calc(var(--logo-size, 80px) * 2.5);
+  object-fit: contain; object-position: center;
+}
 .logo-empty { color: var(--muted); font-size: 12px; }
 .logo-upload { display: grid; gap: 6px; min-width: 0; }
 .logo-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -975,10 +981,28 @@ h2 { font-size: 21px; }
 .logo-file-field input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .logo-file-field:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
 .logo-busy { color: var(--primary); font-size: 12px; font-weight: 600; }
+
+/* Campo "Misura (px)" di ciascun logo nelle Impostazioni */
+.logo-size-ctl {
+  display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+}
+.logo-size-ctl .form-label { font-size: 12px; display: block; margin-bottom: 4px; }
+.logo-size-input { width: 100px; text-align: center; }
+.logo-size-hint {
+  font-size: 11.5px; color: var(--muted); margin: 0; width: 100%;
+  line-height: 1.45;
+}
+.logo-size-err { color: var(--danger); font-size: 12px; font-weight: 600; margin: 0; }
 @media (max-width: 620px) {
   .logo-row { flex-direction: column; align-items: flex-start; }
-  .logo-preview { width: 100%; height: 120px; }
-  .logo-preview img { width: 50px; height: 50px; object-fit: contain; object-position: center; }
+  .logo-preview { width: 100%; min-height: 100px; padding: 6px; }
+  .logo-preview img {
+    /* Anteprima mobile: 0.625x la misura Impostazioni (default 80*0.625=50 px). */
+    width: calc(var(--logo-size, 80px) * 0.625);
+    height: calc(var(--logo-size, 80px) * 0.625);
+    object-fit: contain; object-position: center;
+  }
 }
 
 /* ============ Sub-amministratori (Impostazioni) ============ */
@@ -1043,8 +1067,9 @@ h2 { font-size: 21px; }
   .auth-shell { padding: 16px; }
   .auth-card { padding: 26px 18px; border-radius: 14px; }
   .auth-logo-img {
-    /* Su smartphone login/registrazione: loghi 100x100. */
-    width: 100px; height: 100px;
+    /* Su smartphone: 1.25x la misura Impostazioni (default 80*1.25=100 px). */
+    width: calc(var(--logo-size, 80px) * 1.25);
+    height: calc(var(--logo-size, 80px) * 1.25);
   }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .span-2 { grid-column: span 1; }

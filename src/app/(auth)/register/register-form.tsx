@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
+import type { CSSProperties } from "react";
 import { registerAction, type AuthState } from "../actions";
 import { PasswordField } from "@/components/password-field";
 import type { LogoInfo } from "@/lib/logos";
@@ -35,10 +36,20 @@ export function RegisterForm({
     <div className="auth-card">
       <div className="auth-logo">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={logos.logo1.src} alt="Logo" className="auth-logo-img" />
+        <img
+          src={logos.logo1.src}
+          alt="Logo"
+          className="auth-logo-img"
+          style={{ "--logo-size": `${logos.logo1.size}px` } as CSSProperties}
+        />
         {logos.logo2.present && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logos.logo2.src} alt="Secondo logo" className="auth-logo-img" />
+          <img
+            src={logos.logo2.src}
+            alt="Secondo logo"
+            className="auth-logo-img"
+            style={{ "--logo-size": `${logos.logo2.size}px` } as CSSProperties}
+          />
         )}
       </div>
       <h1>Registrazione</h1>

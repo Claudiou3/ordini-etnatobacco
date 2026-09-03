@@ -1,14 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { deleteLogoAction, uploadLogoAction } from "./actions";
+import type { CSSProperties } from "react";
+import {
+  deleteLogoAction,
+  saveLogoSizeAction,
+  uploadLogoAction,
+} from "./actions";
 import type { LogoInfo, LogoPosition } from "@/lib/logos";
 
 /**
- * Sezione "Loghi" delle Impostazioni: tre campi per CARICARE, SOSTITUIRE
- * ed ELIMINARE il PRIMO logo (in alto), il SECONDO logo (sotto) e l'ICONA
- * "catalogo da scaricare" (l'icona che gli agenti vedranno sul telefono).
- * Formati ammessi: JPG e PNG.
+ * Sezione "Loghi" delle Impostazioni: tre campi per CARICARE, SOSTITUIRE,
+ * ELIMINARE e REGOLARE LA GRANDEZZA del PRIMO logo (in alto), del SECONDO
+ * logo (sotto) e dell'ICONA app "da scaricare". Per ogni logo è presente un
+ * campo "Grandezza (px)": l'amministratore può gestire in autonomia quanto
+ * è grande ogni logo nella piattaforma. Formati ammessi: JPG e PNG.
  */
 export function LogosForm({
   logos,
@@ -95,7 +101,11 @@ export function LogosForm({
         <div className="logo-preview" aria-hidden="true">
           {info.present ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={info.src} alt={labelOf(position)} />
+            <img
+              src={info.src}
+              alt={labelOf(position)}
+              style={{ "--logo-size": `${info.size}px` } as CSSProperties}
+            />
           ) : (
             <span className="logo-empty">Nessun logo</span>
           )}
@@ -134,6 +144,7 @@ export function LogosForm({
               {info.present ? "Sostituzione in corso…" : "Caricamento in corso…"}
             </span>
           )}
+          <LogoSizeControl position={position} size={info.size} />
         </div>
       </div>
     );
@@ -147,6 +158,11 @@ export function LogosForm({
         compare sul telefono/tablet quando un agente installa l&apos;app con il
         pulsante &quot;SCARICA L&apos;APP&quot;.
       </p>
+      <p className="settings-help">
+        Per ogni logo puoi regolare la <strong>grandezza (px)</strong>: la
+        misura indicata è quella nella <strong>barra laterale</strong>; la
+        pagina di accesso e le anteprime mostrano il logo in proporzione.
+      </p>
 
       {renderRow(1, logos.logo1)}
       {renderRow(2, logos.logo2)}
@@ -158,6 +174,82 @@ export function LogosForm({
         </p>
       )}
       {message && <p className="form-note">{message}</p>}
+    </div>
+  );
+}
+
+/** Campo "Grandezza (px)" di un singolo logo: salva la misura scelta. */
+function LogoSizeControl({
+  position,
+  size,
+}: {
+  position: LogoPosition;
+  size: number;
+}) {
+  const [value, setValue] = useState(String(size));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function apply() {
+    const px = Number.parseInt(value, 10);
+    if (!Number.isInteger(px) || px < 20 || px > 400) {
+      setError("Inserisci un numero intero tra 20 e 400 px.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const res = await saveLogoSizeAction(position, px);
+    if (!res.ok) {
+      setError(res.error ?? "Errore durante il salvataggio.");
+      setBusy(false);
+      return;
+    }
+    // Ricarica: le misure vengono lette lato server (Impostazioni/file).
+    window.setTimeout(() => window.location.reload(), 350);
+  }
+
+  return (
+    <div className="logo-size-ctl">
+      <label>
+        <span className="form-label">Grandezza (px)</span>
+        <input
+          className="form-input logo-size-input"
+          type="number"
+          min={20}
+          max={400}
+          step={1}
+          inputMode="numeric"
+          value={value}
+          disabled={busy}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void apply();
+            }
+          }}
+        />
+      </label>
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={() => void apply()}
+        disabled={busy}
+      >
+        {busy ? "Salvataggio…" : "Applica"}
+      </button>
+      {error && (
+        <p className="logo-size-err" role="alert">
+          {error}
+        </p>
+      )}
+      <p className="logo-size-hint">
+        Valore di riferimento in piattaforma (barra laterale). Su
+        login/registrazione e anteprime il logo viene mostrato in proporzione.
+      </p>
     </div>
   );
 }

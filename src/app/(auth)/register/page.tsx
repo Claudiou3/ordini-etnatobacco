@@ -5,7 +5,7 @@ import { getLogos } from "@/lib/logos";
 import { RegisterForm } from "./register-form";
 
 export const metadata = {
-  title: "Registrazione | IOI Orders",
+  title: "Registrazione | Ordini",
 };
 
 export default async function RegisterPage() {

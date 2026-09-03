@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
     : "/logo-files/logo-3.png";
 
   return {
-    title: "IOI Orders",
+    title: "Ordini",
     description: "Gestione ordini per agenti IOI",
     manifest: "/manifest.webmanifest",
     applicationName: "ordini etnatobacco",

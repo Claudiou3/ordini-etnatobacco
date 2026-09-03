@@ -6,7 +6,7 @@ import { getLogos } from "@/lib/logos";
 import { LoginForm } from "./login-form";
 
 export const metadata = {
-  title: "Accedi | IOI Orders",
+  title: "Accedi | Ordini",
 };
 
 export default async function LoginPage() {

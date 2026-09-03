@@ -11,6 +11,7 @@ import { saveEmailConfig } from "@/lib/email/config";
 import {
   deleteUploadedLogo,
   saveUploadedLogo,
+  setLogoSize,
   type LogoPosition,
 } from "@/lib/logos";
 import {
@@ -254,6 +255,30 @@ export async function deleteLogoAction(
 
   const result = await deleteUploadedLogo(position);
   if (!result.ok) return { error: result.error };
+  return { ok: true };
+}
+
+/**
+ * Imposta la "Grandezza (px)" di un logo della piattaforma (1, 2 o 3).
+ * La misura e' quella di RIFERIMENTO (barra laterale); le altre viste la
+ * scalano in proporzione via CSS.
+ */
+export async function saveLogoSizeAction(
+  position: LogoPosition,
+  sizePx: number
+): Promise<LogoUploadState> {
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+  if (position !== 1 && position !== 2 && position !== 3) {
+    return { error: "Posizione logo non valida." };
+  }
+
+  const result = await setLogoSize(position, sizePx);
+  if (!result.ok) return { error: result.error };
+
+  revalidatePath("/impostazioni");
   return { ok: true };
 }
 

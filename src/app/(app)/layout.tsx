@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { CSSProperties } from "react";
 import { getCurrentAdmin, getCurrentAgent } from "@/lib/supabase/session";
 import { initials } from "@/lib/format";
 import { getLogos } from "@/lib/logos";
@@ -29,10 +30,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="brand-mark">
           <div className="brand-logos">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={logos.logo1.src} alt="Logo" className="brand-logo" />
+            <img
+              src={logos.logo1.src}
+              alt="Logo"
+              className="brand-logo"
+              style={{ "--logo-size": `${logos.logo1.size}px` } as CSSProperties}
+            />
             {logos.logo2.present && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logos.logo2.src} alt="Secondo logo" className="brand-logo" />
+              <img
+                src={logos.logo2.src}
+                alt="Secondo logo"
+                className="brand-logo"
+                style={{ "--logo-size": `${logos.logo2.size}px` } as CSSProperties}
+              />
             )}
           </div>
         </div>

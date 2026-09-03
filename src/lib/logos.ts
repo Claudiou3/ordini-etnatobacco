@@ -31,16 +31,44 @@ export type LogoInfo = {
   /** URL pubblico (con cache-busting) oppure stringa vuota se assente. */
   src: string;
   present: boolean;
+  /**
+   * Misura di RIFERIMENTO (px) del logo scelta dall'amministratore:
+   * corrisponde alla dimensione nella barra laterale; login/registrazione
+   * e anteprime ne derivano proporzionalmente via CSS.
+   */
+  size: number;
 };
 
 /** Posizioni logo: 1 e 2 = loghi della piattaforma, 3 = icona app (catalogo). */
 export type LogoPosition = 1 | 2 | 3;
 
 type LogosConfig = {
-  logo1?: { updatedAt: string };
-  logo2?: { updatedAt: string };
-  logo3?: { updatedAt: string };
+  logo1?: { updatedAt?: string; size?: number };
+  logo2?: { updatedAt?: string; size?: number };
+  logo3?: { updatedAt?: string; size?: number };
 };
+
+/**
+ * Misura di RIFERIMENTO (px) di ciascun logo (== 80 px in sidebar).
+ * 80 px * 1.875 = 150 px su login/registrazione (desktop),
+ * 80 px * 0.625 = 50 px in anteprima mobile, ecc. (vedi globals.css).
+ */
+export const DEFAULT_LOGO_SIZE: Record<LogoPosition, number> = {
+  1: 80,
+  2: 80,
+  3: 80,
+};
+
+/** Misura valida impostata dall'amministratore, altrimenti il default. */
+function logoDisplaySize(
+  config: LogosConfig,
+  position: LogoPosition
+): number {
+  const size = config[`logo${position}`]?.size;
+  return typeof size === "number" && Number.isFinite(size) && size > 0
+    ? Math.round(size)
+    : DEFAULT_LOGO_SIZE[position];
+}
 
 function logoStorageKey(position: LogoPosition): string {
   return `${LOGOS_PREFIX}/logo-${position}.png`;
@@ -132,9 +160,17 @@ async function localLogoInfo(
     const v =
       config[`logo${position}`]?.updatedAt ??
       String(Math.round(stat.mtimeMs));
-    return { src: `/logo-files/logo-${position}.png?v=${v}`, present: true };
+    return {
+      src: `/logo-files/logo-${position}.png?v=${v}`,
+      present: true,
+      size: logoDisplaySize(config, position),
+    };
   } catch {
-    return { src: "", present: false };
+    return {
+      src: "",
+      present: false,
+      size: logoDisplaySize(config, position),
+    };
   }
 }
 
@@ -194,6 +230,7 @@ export async function getLogos(): Promise<{
       ? {
           src: `/logo-files/logo-1.png?v=${encodeURIComponent(storage1)}`,
           present: true,
+          size: logoDisplaySize(config, 1),
         }
       : await localLogoInfo(1, config);
   const logo2 =
@@ -201,6 +238,7 @@ export async function getLogos(): Promise<{
       ? {
           src: `/logo-files/logo-2.png?v=${encodeURIComponent(storage2)}`,
           present: true,
+          size: logoDisplaySize(config, 2),
         }
       : await localLogoInfo(2, config);
   const logo3 =
@@ -208,15 +246,53 @@ export async function getLogos(): Promise<{
       ? {
           src: `/logo-files/logo-3.png?v=${encodeURIComponent(storage3)}`,
           present: true,
+          size: logoDisplaySize(config, 3),
         }
       : await localLogoInfo(3, config);
   return {
     logo1: logo1.present
       ? logo1
-      : { src: "/logo-detomaso.png", present: true },
+      : {
+          src: "/logo-detomaso.png",
+          present: true,
+          size: logoDisplaySize(config, 1),
+        },
     logo2,
     logo3,
   };
+}
+
+/**
+ * Imposta la misura (px) di visualizzazione di un logo (1, 2 o 3).
+ * Il valore è la misura di RIFERIMENTO in piattaforma (barra laterale);
+ * le altre viste (login/registrazione, anteprime) la scalano via CSS.
+ * Salvata nella configurazione loghi (Impostazioni remote o file locale).
+ */
+export async function setLogoSize(
+  position: LogoPosition,
+  size: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!Number.isInteger(size) || size < 20 || size > 400) {
+    return {
+      ok: false,
+      error: "La misura deve essere un numero intero tra 20 e 400 px.",
+    };
+  }
+  try {
+    const config = await readConfig();
+    config[`logo${position}`] = {
+      ...config[`logo${position}`],
+      size: Math.round(size),
+    };
+    await writeConfig(config);
+    return { ok: true };
+  } catch {
+    return {
+      ok: false,
+      error:
+        "Impossibile salvare la misura (file system in sola lettura e Impostazioni remote non raggiungibili).",
+    };
+  }
 }
 
 /**

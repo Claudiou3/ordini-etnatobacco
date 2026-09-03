@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import type { CSSProperties } from "react";
 import { loginAction, loginDemo, type AuthState } from "../actions";
 import { AdminSetupForm } from "./admin-setup-form";
 import { AdminLoginForm } from "./admin-login-form";
@@ -25,10 +26,20 @@ export function LoginForm({
     <div className="auth-card">
       <div className="auth-logo">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={logos.logo1.src} alt="Logo" className="auth-logo-img" />
+        <img
+          src={logos.logo1.src}
+          alt="Logo"
+          className="auth-logo-img"
+          style={{ "--logo-size": `${logos.logo1.size}px` } as CSSProperties}
+        />
         {logos.logo2.present && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logos.logo2.src} alt="Secondo logo" className="auth-logo-img" />
+          <img
+            src={logos.logo2.src}
+            alt="Secondo logo"
+            className="auth-logo-img"
+            style={{ "--logo-size": `${logos.logo2.size}px` } as CSSProperties}
+          />
         )}
       </div>
       <h1>Accedi</h1>
