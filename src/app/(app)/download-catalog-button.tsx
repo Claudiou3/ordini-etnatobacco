@@ -99,14 +99,23 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
             <strong>tre puntini ⋮</strong>
           </li>
           <li>
-            Scegli <strong>&quot;Aggiungi a schermata Home&quot;</strong>{" "}
-            (oppure <strong>&quot;Installa app&quot;</strong>)
+            Scegli <strong>&quot;Installa app&quot;</strong>: compare il nome{" "}
+            <strong>&quot;ordini etnatobacco&quot;</strong> con la sua icona.
+            Se la voce non c&apos;è, chiudi e riapri il sito: la voce compare
+            dopo qualche secondo
           </li>
           <li>
-            Tocca <strong>&quot;Aggiungi&quot;</strong>: ora l&apos;icona del
-            catalogo è sulla Home
+            Premi <strong>&quot;Installa&quot;</strong>: l&apos;app parte a{" "}
+            <strong>schermo intero</strong>, senza barra del browser
           </li>
         </ol>
+        <p className="install-note">
+          ⚠️ Non usare <strong>&quot;Aggiungi a schermata Home&quot;</strong>:
+          quella è solo una scorciatoia che si apre dentro Chrome e accanto
+          all&apos;icona compare il <strong>logo di Chrome</strong>. Con{" "}
+          <strong>&quot;Installa app&quot;</strong> l&apos;icona è quella
+          dell&apos;app e non c&apos;è alcun logo del browser.
+        </p>
       </>
     ),
     desktop: (

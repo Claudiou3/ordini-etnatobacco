@@ -15,7 +15,7 @@ export async function GET(): Promise<Response> {
   const logos = await getLogos();
   const icon = logos.logo3.present
     ? logos.logo3.src
-    : "/logo-files/logo-3.png";
+    : "/app-icon-512.png";
 
   const manifest = {
     name: "ordini etnatobacco",

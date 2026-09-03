@@ -22,6 +22,19 @@ import {
  * al solo cookie: lo fa la pagina stessa).
  */
 export async function updateSession(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // File "pubblici" che il browser deve poter raggiungere ANCHE senza login:
+  // il manifest PWA, il service worker e le immagini/loghi. Se fossero
+  // protetti, il telefono non riceverebbe l'icona/manifest validi e Chrome
+  // proporrebbe solo la "scorciatoia" (con il logo di Chrome sull'icona)
+  // invece della vera installazione PWA.
+  const isPublicAsset =
+    pathname.startsWith("/manifest.webmanifest") ||
+    pathname.startsWith("/sw.js") ||
+    /\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/.test(pathname);
+  if (isPublicAsset) return NextResponse.next({ request });
+
   if (!hasSupabaseConfig()) {
     // Supabase non configurato: lascia passare, le pagine mostrano
     // un messaggio di configurazione mancante.
@@ -56,8 +69,8 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/register");
+  const isAuthRoute =
+    pathname.startsWith("/login") || pathname.startsWith("/register");
 
   // Sessione locale amministratore/sub-amministratore (presenza del cookie).
   const hasLocalAdminSession =
