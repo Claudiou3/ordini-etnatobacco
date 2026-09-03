@@ -91,7 +91,25 @@ export type OrderListItem = {
   annullato_at?: string | null;
 };
 
+/** Cliente del dettaglio: può contenere l'ANAGRAFICA COMPLETA quando il DB
+ * la restituisce (indirizzo, CAP, città, provincia, SDI, cellulare, email). */
+export type OrderCustomerDetail = Pick<Customer, "ragione_sociale"> &
+  Partial<
+    Pick<
+      Customer,
+      | "indirizzo"
+      | "cap"
+      | "citta"
+      | "provincia"
+      | "partita_iva"
+      | "codice_fiscale"
+      | "sdi"
+      | "cellulare"
+      | "email"
+    >
+  >;
+
 export type OrderDetail = {
-  order: Order & { customers: Pick<Customer, "ragione_sociale"> | null };
+  order: Order & { customers: OrderCustomerDetail | null };
   items: OrderItem[];
 };

@@ -919,9 +919,17 @@ h2 { font-size: 21px; }
   }
   .dashboard-shell { display: block; }
   .content-area { padding: 0 !important; max-width: none !important; }
-  .content-panel { box-shadow: none !important; border-color: var(--line); }
-  .topbar { margin-bottom: 14px; }
+  .content-panel { box-shadow: none !important; border-color: var(--line); padding: 12px 14px; }
+  .topbar { margin-bottom: 12px; }
+  .topbar h1 { font-size: 18px; margin: 0; }
   body { background: #fff; }
+  /* L'anagrafica completa deve stare nella pagina stampata: font ridotto. */
+  .detail-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px; }
+  .detail-grid dt { font-size: 9.5px; margin-bottom: 2px; }
+  .detail-grid dd { font-size: 12.5px; }
+  .totals-box dd { font-size: 13px; }
+  .totals-box .grand dd { font-size: 16px; }
+  .data-table { font-size: 12px; }
 }
 
 /* ============ Configurazione server email (Impostazioni) ============ */

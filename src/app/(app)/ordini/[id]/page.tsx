@@ -71,12 +71,40 @@ export default async function OrderDetailPage({
             <dd>{cliente}</dd>
           </div>
           <div>
+            <dt>Indirizzo</dt>
+            <dd>{order.customers?.indirizzo || "—"}</dd>
+          </div>
+          <div>
+            <dt>CAP</dt>
+            <dd>{order.customers?.cap || "—"}</dd>
+          </div>
+          <div>
+            <dt>Città</dt>
+            <dd>{order.customers?.citta || "—"}</dd>
+          </div>
+          <div>
+            <dt>Provincia</dt>
+            <dd>{order.customers?.provincia || "—"}</dd>
+          </div>
+          <div>
             <dt>P.IVA / Codice fiscale</dt>
             <dd>
               {[order.partita_iva, order.codice_fiscale]
                 .filter(Boolean)
                 .join(" / ") || "—"}
             </dd>
+          </div>
+          <div>
+            <dt>SDI</dt>
+            <dd>{order.customers?.sdi || "—"}</dd>
+          </div>
+          <div>
+            <dt>Cellulare</dt>
+            <dd>{order.customers?.cellulare || "—"}</dd>
+          </div>
+          <div>
+            <dt>Email</dt>
+            <dd>{order.customers?.email || "—"}</dd>
           </div>
           <div>
             <dt>Data ordine</dt>

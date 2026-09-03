@@ -233,15 +233,24 @@ export async function getOrderDetail(
   const isAdmin = await isLocalAdmin();
   let query = supabase
     .from("orders")
-    .select("*, customers(ragione_sociale)")
+    // Anagrafica COMPLETA del cliente (serve per la stampa del documento).
+    .select("*, customers(*)")
     .eq("id", orderId);
   if (!isAdmin) query = query.eq("agent_id", agentId);
 
-  const { data: order, error } = await query.maybeSingle();
-  if (error || !order) {
+  const { data: rawOrder, error } = await query.maybeSingle();
+  if (error || !rawOrder) {
     const file = await fileGetOrderDetail(orderId);
     if (file) return file;
     return demoGetOrderDetail(orderId);
+  }
+
+  const order = rawOrder as unknown as OrderDetail["order"];
+  // Supabase può restituire la relazione customers come oggetto; per sicurezza
+  // accetta anche una lista e prende il primo elemento.
+  const customers = order.customers as unknown;
+  if (Array.isArray(customers)) {
+    order.customers = (customers[0] ?? null) as OrderDetail["order"]["customers"];
   }
 
   const { data: items } = await supabase
@@ -251,7 +260,7 @@ export async function getOrderDetail(
     .order("product_row", { ascending: true });
 
   return {
-    order: order as OrderDetail["order"],
+    order: order as unknown as OrderDetail["order"],
     items: (items ?? []) as OrderDetail["items"],
   };
 }
