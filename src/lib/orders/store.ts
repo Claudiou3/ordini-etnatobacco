@@ -149,9 +149,28 @@ export async function fileRestoreOrder(orderId: string): Promise<boolean> {
   return true;
 }
 
-/** Elimina il file Excel dell'ordine (se presente) da Storage e/o da data/orders. */
-export async function deleteOrderExcelFile(numero: string): Promise<void> {
-  const fileName = `${numero}.xlsx`;
+/**
+ * Elimina il file Excel dell'ordine (se presente) da Storage e/o da data/orders.
+ * @param fileRef può essere il vecchio nome derivato dal numero ordine
+ *   (es. "ORD-2026-0001") oppure l'URL completo del file salvato
+ *   (es. "/ordini-files/Agente - Cliente.xlsx").
+ */
+export async function deleteOrderExcelFile(fileRef: string): Promise<void> {
+  // Estrae il nome file dall'URL (se arriva "/ordini-files/...").
+  let raw = fileRef.includes("/") ? fileRef.slice(fileRef.lastIndexOf("/") + 1) : fileRef;
+  const queryIdx = raw.indexOf("?");
+  if (queryIdx >= 0) raw = raw.slice(0, queryIdx);
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    // nome già leggibile
+  }
+  const base = decoded.toLowerCase().endsWith(".xlsx")
+    ? decoded.slice(0, -5)
+    : decoded;
+  const fileName = `${base}.xlsx`;
+
   // Supabase Storage.
   try {
     const supabase = await createAdminClient();

@@ -43,6 +43,9 @@ export async function deleteOrderAction(
   }
 
   const numero = detail.order.numero_ordine;
+  // Il file Excel ora si chiama "agente - cliente": per eliminarlo si usa
+  // l'URL salvato sull'ordine (fallback: vecchio nome con il numero ordine).
+  const fileRef = detail.order.file_url || numero;
 
   // Database (Supabase): l'agente elimina solo i propri (RLS), l'admin tutti.
   if (await isSupabaseConfigured()) {
@@ -53,7 +56,7 @@ export async function deleteOrderAction(
       const { data, error } = await query.select("id");
       // Eliminato davvero dal database: rimuovi anche il file Excel e via.
       if (!error && data && data.length > 0) {
-        await deleteOrderExcelFile(numero);
+        await deleteOrderExcelFile(fileRef);
         revalidatePath("/ordini");
         return { success: true };
       }
@@ -64,7 +67,7 @@ export async function deleteOrderAction(
 
   // Ordini salvati localmente (modalita' demo / ordini dell'amministratore).
   await fileDeleteOrder(orderId);
-  await deleteOrderExcelFile(numero);
+  await deleteOrderExcelFile(fileRef);
 
   revalidatePath("/ordini");
   return { success: true };

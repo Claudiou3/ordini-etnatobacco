@@ -4,7 +4,11 @@ import { existsSync } from "node:fs";
 import XLSXPopulate from "xlsx-populate";
 import JSZip from "jszip";
 import { appDataDir, appDataPath, appRootPath } from "@/lib/data-dir";
-import { uploadOrderExcel, downloadWorkingTemplate } from "./storage";
+import {
+  uploadOrderExcel,
+  downloadWorkingTemplate,
+  orderFileExists,
+} from "./storage";
 
 /**
  * Generazione del MODULO ORDINE Excel.
@@ -112,10 +116,6 @@ async function injectCachedValues(
   }
 }
 
-function templateFile(): string {
-  return existsSync(WORKING_TEMPLATE) ? WORKING_TEMPLATE : ROOT_TEMPLATE;
-}
-
 /**
  * Fonte del template per generare l'ordine:
  * 1) template di lavoro su Supabase Storage (sconti/prezzi gestiti dal Catalogo);
@@ -147,7 +147,8 @@ export async function generateOrderWorkbook(
   sheet.cell(4, 4).value(cliente.ragione_sociale);
   sheet.cell(4, 9).value(input.data_ordine);
   sheet.cell(5, 4).value(cliente.indirizzo);
-  sheet.cell(5, 9).value(input.numero_ordine);
+  // N. ORDINE (cella I5) LASCIATO VUOTO di proposito: il numero di ordine
+  // viene gestito MANUALMENTE sulla stampa/documento cartaceo.
   sheet.cell(6, 4).value(cliente.cap);
   sheet.cell(6, 9).value(input.agente);
   sheet.cell(7, 4).value(cliente.citta);
@@ -178,6 +179,43 @@ export async function generateOrderWorkbook(
   sheet.cell(10, 4).value(cliente.sdi);
   sheet.cell(11, 4).value(cliente.cellulare);
   sheet.cell(12, 4).value(cliente.email);
+
+  // STAMPA ANAGRAFICA COMPLETA + font adattivo: se i dati sono lunghi il
+  // carattere si riduce leggermente (8/9 px invece di 10) così nella stampa
+  // compaiono TUTTI i campi del cliente senza uscire dalla pagina.
+  const headerValues = [
+    cliente.ragione_sociale,
+    cliente.indirizzo,
+    cliente.cap,
+    cliente.citta,
+    cliente.provincia,
+    pivaCf,
+    cliente.sdi,
+    cliente.cellulare,
+    cliente.email,
+    input.data_ordine,
+    input.agente,
+    input.pagamento,
+    noteText,
+  ].filter(Boolean) as string[];
+  const maxLen = Math.max(0, ...headerValues.map((s) => s.length));
+  const fontSize = maxLen >= 80 ? 7 : maxLen >= 55 ? 8 : maxLen >= 35 ? 9 : 10;
+  for (let r = 4; r <= 12; r++) {
+    try {
+      const font = sheet.cell(r, 4).style("font") as { size?: number };
+      sheet.cell(r, 4).style("font", { ...font, size: fontSize });
+    } catch {
+      // stile non applicabile: il valore resta comunque scritto
+    }
+  }
+  for (let r = 4; r <= 8; r++) {
+    try {
+      const font = sheet.cell(r, 9).style("font") as { size?: number };
+      sheet.cell(r, 9).style("font", { ...font, size: fontSize });
+    } catch {
+      // stile non applicabile: il valore resta comunque scritto
+    }
+  }
 
   // Righe articolo: P=QUANTITA'. Le colonne Q (TOTALE IVA ESCL.) e R (TOTALE
   // IVA INCL.) contengono le FORMULE del template (Q=N*P, R=O*P): le
@@ -229,12 +267,41 @@ export async function generateOrderWorkbook(
   return injectCachedValues(rawBuffer, values);
 }
 
+/**
+ * Nome file Excel dell'ordine = "NOME AGENTE - NOME CLIENTE" (non più il
+ * numero di ordine). Pulisce i caratteri non ammessi nei nomi file.
+ */
+export function sanitizeFileBase(value: string): string {
+  const cleaned = value
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.\s]+$/, "")
+    .slice(0, 120);
+  return cleaned.length > 0 ? cleaned : "ordine";
+}
+
+/**
+ * Se esiste già un file con lo stesso nome (stesso agente + stesso cliente)
+ * aggiunge un suffisso progressivo (2), (3)... così non si sovrascrive mai
+ * un ordine precedente.
+ */
+async function uniqueFileName(base: string): Promise<string> {
+  let candidate = `${base}.xlsx`;
+  let counter = 1;
+  while (await orderFileExists(candidate)) {
+    counter += 1;
+    candidate = `${base} (${counter}).xlsx`;
+  }
+  return candidate;
+}
+
 /** Salva un ordine Excel (Supabase Storage se disponibile, altrimenti data/orders/) e ritorna l'URL pubblico. */
 export async function saveOrderWorkbook(
-  numero_ordine: string,
+  fileNameBase: string,
   buffer: Buffer
 ): Promise<string> {
-  const fileName = `${numero_ordine}.xlsx`;
+  const fileName = await uniqueFileName(sanitizeFileBase(fileNameBase));
   const uploaded = await uploadOrderExcel(fileName, buffer);
   if (uploaded) {
     return `/ordini-files/${encodeURIComponent(fileName)}`;

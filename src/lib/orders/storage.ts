@@ -1,4 +1,6 @@
+import { existsSync } from "node:fs";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { appDataPath } from "@/lib/data-dir";
 
 /**
  * Archiviazione dei file Excel degli ordini.
@@ -11,6 +13,22 @@ export const ORDERS_BUCKET = "ordini";
 
 const XLSX_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+/** True se esiste già un file con questo nome (Storage remoto o locale). */
+export async function orderFileExists(fileName: string): Promise<boolean> {
+  const supabase = await createAdminClient();
+  if (supabase) {
+    const { data, error } = await supabase.storage
+      .from(ORDERS_BUCKET)
+      .list("", { limit: 1000 });
+    if (!error && data && data.some((f) => f.name === fileName)) return true;
+  }
+  try {
+    return existsSync(appDataPath("orders", fileName));
+  } catch {
+    return false;
+  }
+}
 
 export async function uploadOrderExcel(
   fileName: string,

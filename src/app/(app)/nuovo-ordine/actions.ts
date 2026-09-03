@@ -32,6 +32,7 @@ import {
 import {
   generateOrderWorkbook,
   saveOrderWorkbook,
+  sanitizeFileBase,
 } from "@/lib/orders/excel";
 import { sendOrderEmail } from "@/lib/email/send";
 import { isSupabaseConfigured } from "@/lib/settings/runtime";
@@ -558,6 +559,8 @@ export async function submitOrder(
     agent.id === "admin-agent"
       ? agent.nome
       : `${agent.nome}${agent.email ? ` (${agent.email})` : ""}`;
+  // Il FILE Excel si chiama "NOME AGENTE - NOME CLIENTE" (niente numero ordine).
+  const fileBase = `${agent.nome} - ${ragioneSociale}`;
 
   let fileUrl: string | null = null;
   let excelBuffer: Buffer | null = null;
@@ -594,7 +597,7 @@ export async function submitOrder(
       })),
       totali: { imponibile, iva, trasporto, ivaTrasporto, totale },
     });
-    fileUrl = await saveOrderWorkbook(numero, excelBuffer);
+    fileUrl = await saveOrderWorkbook(fileBase, excelBuffer);
   } catch (err) {
     excelError = "Errore generazione file Excel: " + (err as Error).message;
   }
@@ -634,7 +637,7 @@ export async function submitOrder(
     emailResult = await sendOrderEmail({
       subject: `Nuovo ordine ${numero} — ${ragioneSociale}`,
       text: `Ordine ${numero} del ${dataOrdine} per ${ragioneSociale}.\nTotale: € ${totale.toFixed(2)}.\nIn allegato il modulo Excel compilato.`,
-      attachment: { filename: `${numero}.xlsx`, content: excelBuffer },
+      attachment: { filename: `${sanitizeFileBase(fileBase)}.xlsx`, content: excelBuffer },
     });
   }
 
