@@ -122,10 +122,9 @@ export async function getOrderCatalog(): Promise<OrderGroup[]> {
 }
 
 /**
- * Articoli ammessi all'OMAGGIO: SOLO articoli presenti nel file catalogo
- * (ordine_template.xlsx): occhiali singoli (LETTURA/SOLE) e le ricariche
- * "De Tomaso Ricarica ... 4pz" presenti nel catalogo. Esclusi: kit, espositori
- * (precaricati e non), astucci e le altre ricariche.
+ * Articoli ammessi all'OMAGGIO: gli occhiali singoli (LETTURA/SOLE da 1 pezzo)
+ * e le ricariche ammesse (confezioni "De Tomaso Ricarica 501..532 +diottria
+ * 4pz"). Esclusi: kit, espositori (precaricati e non) e astucci.
  */
 export async function getGiftArticles(): Promise<OrderVariant[]> {
   const items = await readCatalog();
@@ -141,8 +140,8 @@ export async function getGiftArticles(): Promise<OrderVariant[]> {
       ) {
         return false;
       }
-      // Omaggio = unita' da 1 pezzo, ad eccezione delle ricariche ammesse
-      // (confezioni da 4 pezzi: "4pz").
+      // Omaggio = occhiale in confezione da 1 pezzo, ad eccezione delle
+      // ricariche ammesse (confezioni da 4 pezzi: "4pz").
       if (item.pezzi !== 1 && !ricaricaAmmessa) return false;
       return true;
     })

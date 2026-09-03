@@ -289,12 +289,20 @@ export function NewOrderForm({
     setGiftLines((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // Articoli omaggio raggruppati per modello (stesso stile del catalogo).
+  // Articoli omaggio raggruppati per ARTICOLO (stessa logica del catalogo):
+  // le diverse DIOTTRIE dello stesso articolo vengono raccolte nel menu a
+  // tendina dell'articolo. Copre sia gli occhiali (diottria in fondo al nome:
+  // "... +1,00") sia le ricariche ammesse (diottria prima del "4pz":
+  // "... Ricarica 501 +1,00 4pz" -> articolo "Ricarica 501").
   const giftGroups = useMemo(() => {
     const map = new Map<string, OrderVariant[]>();
     const order: string[] = [];
     for (const g of giftArticles) {
-      const base = g.descrizione.replace(/\s+\+[\d,]+$/, "").trim();
+      let base = g.descrizione.replace(/\s+\+[\d,]+$/, "").trim();
+      if (g.descrizione.includes("Ricarica")) {
+        const match = g.descrizione.match(/Ricarica\s+(\d+)/);
+        if (match) base = `Ricarica ${match[1]}`;
+      }
       if (!map.has(base)) {
         map.set(base, []);
         order.push(base);

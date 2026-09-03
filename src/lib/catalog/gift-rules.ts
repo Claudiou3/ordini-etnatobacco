@@ -19,13 +19,16 @@ export function isValidGiftTotal(total: number): boolean {
   return Number.isInteger(total) && total >= 1 && total <= GIFT_MAX_QTY;
 }
 
-/** Descrivono un articolo candidabile a omaggio (solo occhiali singoli). */
+/**
+ * Descrivono un articolo NON candidabile a omaggio: restano ammessi SOLO
+ * gli occhiali singoli e le ricariche consentite (vedi sotto).
+ */
 export const GIFT_EXCLUDED_PATTERNS = /expo|kit|astuccio|ricarica/i;
 
 /**
  * Ricariche ammesse come OMAGGIO: le confezioni
- * "De Tomaso Ricarica 501..532 +diottria 4pz" (decisione aziendale:
- * restano escluse le altre ricariche, es. RDT).
+ * "De Tomaso Ricarica 501..532 +diottria 4pz" (restano escluse le altre
+ * ricariche, es. RDT).
  */
 const GIFT_ALLOWED_RICARICA =
   /^De Tomaso Ricarica (50[1-9]|51[0-9]|52[0-9]|53[0-2]) \+[\d,]+ 4pz$/i;
