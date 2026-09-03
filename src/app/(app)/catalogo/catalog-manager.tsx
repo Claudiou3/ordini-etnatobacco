@@ -4,16 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CatalogItem } from "@/lib/catalog/template";
 import {
-  saveDiscountAction,
-  saveProductPriceAction,
+  saveCatalogPricesAction,
   applyBulkDiscountAction,
   saveStep4Action,
   applyBulkStep4Action,
 } from "./actions";
 
 type Msg = { type: "ok" | "err"; text: string } | null;
-
-const eur = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" });
 
 export function CatalogManager({
   items,
@@ -27,10 +24,9 @@ export function CatalogManager({
   const [bulkPct, setBulkPct] = useState("60");
   const [values, setValues] = useState<Record<number, string>>({});
   const [priceValues, setPriceValues] = useState<Record<number, string>>({});
-  // Ricorda quale campo e' stato modificato per ultimo (sconto % o prezzo vendita).
-  const [lastEdited, setLastEdited] = useState<
-    Record<number, "sconto" | "prezzo">
-  >({});
+  // PREZZO iniziale (listino) editabile: insieme allo SCONTO % genera
+  // automaticamente il PREZZO DI VENDITA.
+  const [baseValues, setBaseValues] = useState<Record<number, string>>({});
   const [message, setMessage] = useState<Msg>(null);
   const [pending, startTransition] = useTransition();
   const [step4Busy, setStep4Busy] = useState<number | null>(null);
@@ -50,22 +46,47 @@ export function CatalogManager({
     return Math.round(item.sconto * 10000) / 100;
   }
 
+  function currentBase(item: CatalogItem): number {
+    const raw = baseValues[item.row];
+    const n = raw === undefined ? item.prezzo : Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : item.prezzo;
+  }
+
+  function currentScontoPct(item: CatalogItem): number {
+    const raw = values[item.row];
+    const n = raw === undefined ? scontoPctOf(item) : Number(raw);
+    return Number.isFinite(n) ? n : scontoPctOf(item);
+  }
+
+  function onBasePriceChange(item: CatalogItem, raw: string) {
+    setBaseValues((prev) => ({ ...prev, [item.row]: raw }));
+    const base = Number(raw);
+    const pct = Math.min(100, Math.max(0, currentScontoPct(item)));
+    if (Number.isFinite(base) && base > 0) {
+      // Prezzo di vendita = prezzo iniziale - sconto % (automatico).
+      const sale = base * (1 - pct / 100);
+      setPriceValues((prev) => ({ ...prev, [item.row]: sale.toFixed(2) }));
+    }
+  }
+
   function onScontoChange(item: CatalogItem, raw: string) {
-    setLastEdited((prev) => ({ ...prev, [item.row]: "sconto" }));
     setValues((prev) => ({ ...prev, [item.row]: raw }));
+    const base = currentBase(item);
     const pct = Number(raw);
-    if (Number.isFinite(pct) && item.prezzo > 0) {
-      const price = item.prezzo * (1 - Math.min(100, Math.max(0, pct)) / 100);
-      setPriceValues((prev) => ({ ...prev, [item.row]: price.toFixed(2) }));
+    if (base > 0 && Number.isFinite(pct)) {
+      // Prezzo di vendita rigenerato in automatico dallo sconto inserito.
+      const sale = base * (1 - Math.min(100, Math.max(0, pct)) / 100);
+      setPriceValues((prev) => ({ ...prev, [item.row]: sale.toFixed(2) }));
     }
   }
 
   function onPriceChange(item: CatalogItem, raw: string) {
-    setLastEdited((prev) => ({ ...prev, [item.row]: "prezzo" }));
     setPriceValues((prev) => ({ ...prev, [item.row]: raw }));
     const price = Number(raw);
-    if (Number.isFinite(price) && item.prezzo > 0) {
-      const pct = (1 - Math.min(price, item.prezzo) / item.prezzo) * 100;
+    const base = currentBase(item);
+    if (Number.isFinite(price) && base > 0) {
+      // Modifica diretta del prezzo di vendita: ricalcola lo sconto %.
+      const pct = (1 - Math.min(price, base) / base) * 100;
       setValues((prev) => ({
         ...prev,
         [item.row]: Math.max(0, pct).toFixed(1),
@@ -76,34 +97,21 @@ export function CatalogManager({
   async function handleSave(row: number) {
     const item = items.find((i) => i.row === row);
     if (!item) return;
-    // Se l'ultimo campo modificato e' il prezzo di vendita, salva il prezzo;
-    // altrimenti salva lo sconto percentuale.
-    if ((lastEdited[row] ?? "sconto") === "prezzo") {
-      const price = Number(priceValues[row] ?? item.nettoEscl);
-      if (!Number.isFinite(price) || price < 0) {
-        setMessage({ type: "err", text: "Prezzo di vendita non valido." });
-        return;
-      }
-      startTransition(async () => {
-        const res = await saveProductPriceAction(row, price);
-        if (res.error) setMessage({ type: "err", text: res.error });
-        else {
-          setMessage({ type: "ok", text: "Prezzo di vendita salvato." });
-          router.refresh();
-        }
-      });
+    const prezzoBase = currentBase(item);
+    const pct = currentScontoPct(item);
+    if (!Number.isFinite(prezzoBase) || prezzoBase <= 0) {
+      setMessage({ type: "err", text: "Prezzo non valido (maggiore di zero)." });
       return;
     }
-    const pct = Number(values[row] ?? scontoPctOf(item));
     if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
       setMessage({ type: "err", text: "Percentuale non valida (0-100)." });
       return;
     }
     startTransition(async () => {
-      const res = await saveDiscountAction(row, pct);
+      const res = await saveCatalogPricesAction(row, prezzoBase, pct);
       if (res.error) setMessage({ type: "err", text: res.error });
       else {
-        setMessage({ type: "ok", text: "Sconto salvato." });
+        setMessage({ type: "ok", text: "Prezzo e sconto salvati." });
         router.refresh();
       }
     });
@@ -292,7 +300,19 @@ export function CatalogManager({
                     </small>
                   </td>
                   <td>{item.diottria || "—"}</td>
-                  <td>{eur.format(item.prezzo)}</td>
+                  <td>
+                    <input
+                      className="form-input sconto-input base-price-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={baseValues[item.row] ?? item.prezzo.toFixed(2)}
+                      onChange={(e) => onBasePriceChange(item, e.target.value)}
+                      disabled={!canEdit}
+                      aria-label={`Prezzo ${item.codice}`}
+                      title="Prezzo iniziale (modificabile)"
+                    />
+                  </td>
                   <td>{item.iva}%</td>
                   <td>
                     <input

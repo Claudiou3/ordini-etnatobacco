@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentAdmin } from "@/lib/supabase/session";
-import { saveDiscounts, savePrices, saveStep4 } from "@/lib/catalog/template";
+import { saveCatalogPrices, saveDiscounts, savePrices, saveStep4 } from "@/lib/catalog/template";
 
 export type CatalogActionState = { error?: string; success?: boolean; applied?: number };
 
@@ -48,6 +48,35 @@ export async function saveProductPriceAction(
 
   try {
     await savePrices([{ row, nettoEscl: round2(nettoEscl) }]);
+  } catch (err) {
+    return { error: "Errore salvataggio: " + (err as Error).message };
+  }
+  revalidatePath("/catalogo");
+  return { success: true };
+}
+
+/**
+ * Salva PREZZO iniziale + SCONTO % di un articolo e genera automaticamente il
+ * PREZZO DI VENDITA (netto = prezzo * (1 - sconto/100)).
+ */
+export async function saveCatalogPricesAction(
+  row: number,
+  prezzoBase: number,
+  scontoPct: number
+): Promise<CatalogActionState> {
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin)
+    return { error: "Operazione riservata all'amministratore." };
+  if (!Number.isInteger(row) || row <= 0) return { error: "Articolo non valido." };
+  if (!Number.isFinite(prezzoBase) || prezzoBase <= 0 || prezzoBase > 100000) {
+    return { error: "Prezzo non valido (deve essere maggiore di zero)." };
+  }
+  if (!validPct(scontoPct)) return { error: "La percentuale deve essere tra 0 e 100." };
+
+  try {
+    await saveCatalogPrices([
+      { row, prezzo: round2(prezzoBase), sconto: scontoPct / 100 },
+    ]);
   } catch (err) {
     return { error: "Errore salvataggio: " + (err as Error).message };
   }

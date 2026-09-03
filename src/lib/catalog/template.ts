@@ -245,6 +245,65 @@ export async function saveDiscounts(
 }
 
 /**
+ * Imposta il PREZZO di listino (col I) e lo SCONTO (frazione, col M) per le
+ * righe indicate e RICALCOLA automaticamente il PREZZO DI VENDITA:
+ *   netto = prezzo * (1 - sconto)
+ * (N = NETTO IVA ESCL., O = NETTO IVA INCL.). I netti vengono poi
+ * normalizzati su tutte le righe leggendo il foglio DOPO le modifiche.
+ */
+export async function saveCatalogPrices(
+  updates: { row: number; prezzo: number; sconto: number }[]
+): Promise<void> {
+  if (updates.length === 0) return;
+  const workbook = await openWorkbook();
+  const sheet = workbook.sheet(0);
+  const { startRow, rows } = readSheet(workbook);
+  const headerIdx = findHeaderIndex(rows);
+  if (headerIdx === -1) throw new Error("Struttura template non riconosciuta.");
+
+  for (const u of updates) {
+    if (!Number.isFinite(u.prezzo) || u.prezzo <= 0) {
+      throw new Error(`Prezzo non valido per la riga ${u.row}.`);
+    }
+    const ivaPerc = parseIvaPerc(rows[u.row - startRow]?.[9]);
+    const prezzo = round2(u.prezzo);
+    const sconto = Math.min(1, Math.max(0, u.sconto));
+    const netto = round2(prezzo * (1 - sconto));
+    const nettoIncl = round2(netto * (1 + ivaPerc / 100));
+    sheet.cell(u.row, 9).value(prezzo); // I = PREZZO (listino)
+    sheet.cell(u.row, 13).value(sconto); // M = SCONTO
+    sheet.cell(u.row, 14).value(netto); // N = NETTO IVA ESCL. (prezzo di vendita)
+    sheet.cell(u.row, 15).value(nettoIncl); // O = NETTO IVA INCL.
+  }
+
+  // Normalizza N/O di TUTTE le righe leggendo il foglio appena aggiornato,
+  // così prezzo di vendita e netto IVA incl. restano coerenti ovunque.
+  const freshSheet = workbook.sheet(0);
+  const freshRange = freshSheet.usedRange();
+  const fresh = freshRange.value() as unknown[][];
+  const freshStart = freshRange.startCell().rowNumber();
+  const freshHeader = findHeaderIndex(fresh);
+  if (freshHeader !== -1) {
+    for (let i = freshHeader + 1; i < fresh.length; i++) {
+      const row = fresh[i] ?? [];
+      const codice = String(row[3] ?? "").trim();
+      const descrizione = String(row[4] ?? "").trim();
+      if (!codice && !descrizione) break;
+      const prezzo = toNumber(row[8]);
+      const sconto = toNumber(row[12]);
+      const ivaPerc = parseIvaPerc(row[9]);
+      const r = freshStart + i;
+      const netto = prezzo * (1 - sconto);
+      freshSheet.cell(r, 13).value(sconto);
+      freshSheet.cell(r, 14).value(round2(netto));
+      freshSheet.cell(r, 15).value(round2(netto * (1 + ivaPerc / 100)));
+    }
+  }
+
+  await persistWorkbook(workbook);
+}
+
+/**
  * Imposta il PREZZO DI VENDITA (netto IVA escl.) scelto dall'amministratore
  * per le righe indicate. Lo sconto implicito (colonna SCONTO) viene ricalcolato
  * come 1 - (prezzo di vendita / prezzo di listino), coerente con il template.

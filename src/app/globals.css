@@ -382,6 +382,7 @@ h2 { font-size: 21px; }
 .bulk-field .form-input { width: 90px; }
 .sconto-input { width: 90px; }
 .price-input { width: 100px; }
+.base-price-input { width: 100px; }
 .import-input { max-width: 420px; }
 .catalog-table td, .catalog-table th { vertical-align: middle; }
 .catalog-table input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); }
