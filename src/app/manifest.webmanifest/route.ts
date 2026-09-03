@@ -1,25 +1,23 @@
-import type { MetadataRoute } from "next";
 import { getLogos } from "@/lib/logos";
 
 /**
- * Manifest dell'app installabile (pulsante "SCARICA L'APP"): permette di
- * aggiungere l'app alla schermata Home di telefono/tablet con l'icona
- * caricata dall'amministratore (logo-3.png) e il nome "ordini etnatobacco".
+ * Manifest dell'app installabile (pulsante "SCARICA L'APP").
  *
- * La rotta è FORZATA DINAMICA: i loghi vengono letti a ogni richiesta, così
- * un'icona appena caricata dalle Impostazioni viene usata subito, senza
- * dover aspettare un nuovo deploy (prima il manifest era generato al build
- * e restava "vecchio" fino al push successivo).
+ * ROUTE HANDLER (non il file manifest.ts di Next): viene eseguita a OGNI
+ * richiesta, quindi l'icona appena caricata dall'amministratore (logo-3.png)
+ * e il nome "ordini etnatobacco" sono sempre quelli attuali, senza aspettare
+ * un nuovo deploy. Con il file manifest.ts il manifest veniva generato al
+ * build e restava "vecchio" dopo ogni nuovo caricamento dell'icona.
  */
 export const dynamic = "force-dynamic";
 
-export default async function manifest(): Promise<MetadataRoute.Manifest> {
+export async function GET(): Promise<Response> {
   const logos = await getLogos();
   const icon = logos.logo3.present
     ? logos.logo3.src
     : "/logo-files/logo-3.png";
 
-  return {
+  const manifest = {
     name: "ordini etnatobacco",
     short_name: "ordini etnatobacco",
     description:
@@ -51,4 +49,13 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
       },
     ],
   };
+
+  return new Response(JSON.stringify(manifest), {
+    headers: {
+      "Content-Type": "application/manifest+json; charset=utf-8",
+      // NIENTE cache: il browser/telefono deve sempre ricevere l'ultima
+      // icona e l'ultimo nome, mai una copia vecchia.
+      "Cache-Control": "no-store, max-age=0",
+    },
+  });
 }
