@@ -914,7 +914,8 @@ h2 { font-size: 21px; }
    STAMPA
    ============================================================ */
 @media print {
-  .sidebar, .scroll-nav, .main-nav, .order-actions, .order-delete-btn, .row-arrow {
+  .sidebar, .scroll-nav, .main-nav, .order-actions, .order-delete-btn,
+  .row-arrow, .order-cancel-control, .print-hide {
     display: none !important;
   }
   .dashboard-shell { display: block; }

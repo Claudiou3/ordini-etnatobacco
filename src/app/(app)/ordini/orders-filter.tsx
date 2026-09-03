@@ -293,19 +293,17 @@ export function OrdersFilter({
                       📄
                     </a>
                   )}
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      className="order-doc-btn"
-                      onClick={() =>
-                        window.open(`/ordini/${order.id}?print=1`, "_blank")
-                      }
-                      title="Stampa l'ordine"
-                      aria-label={`Stampa ordine ${order.numero_ordine}`}
-                    >
-                      🖨
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="order-doc-btn"
+                    onClick={() =>
+                      window.open(`/ordini/${order.id}?print=1`, "_blank")
+                    }
+                    title="Stampa l'ordine"
+                    aria-label={`Stampa ordine ${order.numero_ordine}`}
+                  >
+                    🖨
+                  </button>
                   {canManage &&
                     (order.stato === "annullato" ? (
                       <button

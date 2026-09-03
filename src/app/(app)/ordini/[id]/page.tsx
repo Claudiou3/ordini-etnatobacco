@@ -5,6 +5,7 @@ import { getOrderDetail } from "@/lib/orders";
 import { getReadOrderIds } from "@/lib/orders/read";
 import { formatEur, formatDate } from "@/lib/format";
 import { PrintTrigger } from "../print-trigger";
+import { PrintOrderButton } from "../print-order-button";
 import { OrderCancelControl } from "../order-cancel-control";
 import { ConfirmOrderButton } from "../confirm-order-button";
 
@@ -46,13 +47,16 @@ export default async function OrderDetailPage({
           </p>
           <h1>Ordine {order.numero_ordine}</h1>
         </div>
-        <OrderCancelControl
-          orderId={order.id}
-          numeroOrdine={order.numero_ordine}
-          cliente={cliente}
-          isCancelled={isCancelled}
-          canManage={admin !== null && !admin.subAdmin}
-        />
+        <div className="topbar-actions">
+          <OrderCancelControl
+            orderId={order.id}
+            numeroOrdine={order.numero_ordine}
+            cliente={cliente}
+            isCancelled={isCancelled}
+            canManage={admin !== null && !admin.subAdmin}
+          />
+          {!printMode && <PrintOrderButton />}
+        </div>
       </header>
 
       {isCancelled && (
