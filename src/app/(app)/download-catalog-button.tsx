@@ -123,7 +123,7 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
           </li>
           <li>
             Se non la vedi, clicca i <strong>tre puntini ⋮</strong> (in alto a
-            destra) → <strong>&quot;Installa IOI Orders…&quot;</strong>
+            destra) → <strong>&quot;Installa ordini etnatobacco…&quot;</strong>
           </li>
           <li>
             Fatto: ora sul desktop / menu Start c&apos;è l&apos;icona che apre

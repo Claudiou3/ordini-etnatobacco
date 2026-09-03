@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { getLogos } from "@/lib/logos";
 import "./globals.css";
@@ -13,6 +13,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Next.js 16: il colore del tema va nell'export `viewport`, non in `metadata`
+// (altrimenti Next emette il warning "Unsupported metadata themeColor").
+export const viewport: Viewport = {
+  themeColor: "#2563eb",
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   // Icona dell'app installata ("Logo catalogo da scaricare" caricato
   // dall'amministratore). L'URL include il timestamp del caricamento
@@ -26,13 +32,12 @@ export async function generateMetadata(): Promise<Metadata> {
     title: "IOI Orders",
     description: "Gestione ordini per agenti IOI",
     manifest: "/manifest.webmanifest",
-    applicationName: "IOI Orders",
+    applicationName: "ordini etnatobacco",
     appleWebApp: {
       capable: true,
-      title: "Catalogo",
+      title: "ordini etnatobacco",
       statusBarStyle: "default",
     },
-    themeColor: "#2563eb",
     icons: {
       icon: "/favicon.ico",
       apple: appleIcon,

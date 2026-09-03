@@ -48,8 +48,9 @@ function logoStorageKey(position: LogoPosition): string {
 
 /** Metadati del logo su Storage, se presente. */
 async function storageLogoInfo(
-  position: LogoPosition
-): Promise<{ updatedAt: string } | null> {
+  position: LogoPosition,
+  config: LogosConfig
+): Promise<string | null> {
   const supabase = await createAdminClient();
   if (!supabase) return null;
   const { data, error } = await supabase.storage
@@ -58,7 +59,15 @@ async function storageLogoInfo(
   if (error || !data) return null;
   const item = data.find((f) => f.name === `logo-${position}.png`);
   if (!item) return null;
-  return { updatedAt: item.updated_at ?? new Date().toISOString() };
+  // Versione per il cache-busting (?v=...): usa l'updated_at dello Storage,
+  // altrimenti il timestamp salvato al momento del caricamento, altrimenti 1.
+  // Mai "adesso": un timestamp che cambia a ogni richiesta renderebbe l'URL
+  // (e quindi il manifest) sempre diverso e annullerebbe la cache del browser.
+  return (
+    item.updated_at ??
+    config[`logo${position}`]?.updatedAt ??
+    "1"
+  );
 }
 
 async function downloadLogoFile(position: LogoPosition): Promise<Buffer | null> {
@@ -177,27 +186,27 @@ export async function getLogos(): Promise<{
   logo3: LogoInfo;
 }> {
   const config = await readConfig();
-  const storage1 = await storageLogoInfo(1);
-  const storage2 = await storageLogoInfo(2);
-  const storage3 = await storageLogoInfo(3);
+  const storage1 = await storageLogoInfo(1, config);
+  const storage2 = await storageLogoInfo(2, config);
+  const storage3 = await storageLogoInfo(3, config);
   const logo1 =
     storage1 !== null
       ? {
-          src: `/logo-files/logo-1.png?v=${encodeURIComponent(storage1.updatedAt)}`,
+          src: `/logo-files/logo-1.png?v=${encodeURIComponent(storage1)}`,
           present: true,
         }
       : await localLogoInfo(1, config);
   const logo2 =
     storage2 !== null
       ? {
-          src: `/logo-files/logo-2.png?v=${encodeURIComponent(storage2.updatedAt)}`,
+          src: `/logo-files/logo-2.png?v=${encodeURIComponent(storage2)}`,
           present: true,
         }
       : await localLogoInfo(2, config);
   const logo3 =
     storage3 !== null
       ? {
-          src: `/logo-files/logo-3.png?v=${encodeURIComponent(storage3.updatedAt)}`,
+          src: `/logo-files/logo-3.png?v=${encodeURIComponent(storage3)}`,
           present: true,
         }
       : await localLogoInfo(3, config);

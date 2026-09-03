@@ -144,8 +144,8 @@ export function LogosForm({
       <p className="settings-help">
         Il primo logo è quello visibile in alto; il secondo compare sotto.
         Il <strong>Logo catalogo da scaricare</strong> è l&apos;icona che
-        compare sul telefono/tablet quando un agente salva l&apos;app con il
-        pulsante &quot;Scarica il catalogo&quot;.
+        compare sul telefono/tablet quando un agente installa l&apos;app con il
+        pulsante &quot;SCARICA L&apos;APP&quot;.
       </p>
 
       {renderRow(1, logos.logo1)}
