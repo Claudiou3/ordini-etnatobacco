@@ -205,29 +205,34 @@ export async function registerAction(
     };
   }
 
-  const { data, error } = await supabase.auth.signUp({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    options: {
-      data: { nome: parsed.data.nome, ruolo: "agente" },
-    },
-  });
+  const admin = await createAdminClient();
 
-  if (error) {
-    return { error: "Registrazione non riuscita: " + error.message };
-  }
-
-  // Se il progetto Supabase richiede la conferma via email, l'account appena
-  // creato non potrebbe accedere con le credenziali. Lo attiviamo SUBITO con
-  // la service role key (operazione SOLO server, mai nel browser): l'agente
-  // viene quindi fatto entrare direttamente nella dashboard.
-  const signedUser = data.user;
-  if (signedUser && !signedUser.email_confirmed_at) {
-    const admin = await createAdminClient();
-    if (admin) {
-      await admin.auth.admin.updateUserById(signedUser.id, {
-        email_confirm: true,
-      });
+  if (admin) {
+    // Flusso principale: crea l'account GIÀ ATTIVO con la service role key
+    // (operazione SOLO server, mai nel browser). In questo modo Supabase NON
+    // invia nessuna email di conferma e l'agente può subito accedere.
+    const { error: createError } = await admin.auth.admin.createUser({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      email_confirm: true,
+      user_metadata: { nome: parsed.data.nome, ruolo: "agente" },
+    });
+    if (createError) {
+      return { error: "Registrazione non riuscita: " + createError.message };
+    }
+  } else {
+    // Fallback (service role non configurata): registrazione standard.
+    // Con "Confirm email" attivo nel progetto Supabase può inviare una email
+    // di conferma: è il caso limite, da eliminare configurando la chiave.
+    const { error: signUpError } = await supabase.auth.signUp({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      options: {
+        data: { nome: parsed.data.nome, ruolo: "agente" },
+      },
+    });
+    if (signUpError) {
+      return { error: "Registrazione non riuscita: " + signUpError.message };
     }
   }
 
