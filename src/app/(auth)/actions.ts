@@ -3,7 +3,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   ADMIN_SESSION_COOKIE,
   ADMIN_SESSION_TTL_MS,
@@ -27,6 +29,87 @@ const loginSchema = z.object({
   password: z.string().min(8),
 });
 
+/** Vero se Supabase segnala che l'email dell'account non è ancora confermata. */
+function isEmailNotConfirmedError(error: {
+  message?: string;
+  code?: string;
+}): boolean {
+  const message = (error?.message ?? "").toLowerCase();
+  const code = (error?.code ?? "").toLowerCase();
+  return message.includes("email not confirmed") || code === "email_not_confirmed";
+}
+
+/**
+ * Conferma l'email di un utente esistente usando la service role key
+ * (operazione SOLO server, mai nel browser). Quando il progetto Supabase
+ * ha "Confirm email" attivo, un agente appena registrato non può accedere
+ * finché non clicca il link: qui attiviamo l'account direttamente.
+ * Trova l'utente per email con paginazione completa.
+ */
+async function confirmUserEmail(
+  admin: SupabaseClient,
+  email: string
+): Promise<boolean> {
+  const wanted = email.trim().toLowerCase();
+  let page = 1;
+  const perPage = 1000;
+  for (;;) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) return false;
+    const users = data?.users ?? [];
+    const target = users.find(
+      (u) => typeof u.email === "string" && u.email.toLowerCase() === wanted
+    );
+    if (target) {
+      const { error: updateError } = await admin.auth.admin.updateUserById(
+        target.id,
+        { email_confirm: true }
+      );
+      return !updateError;
+    }
+    if (users.length < perPage || users.length === 0) return false;
+    page += 1;
+  }
+}
+
+/**
+ * Garantisce che esista la riga in `agents` per l'utente appena autenticato.
+ * Di norma la crea il trigger `handle_new_user` alla registrazione; questo
+ * passaggio copre i casi in cui manca (es. utenti creati prima del trigger
+ * o migrazioni non applicate), evitando il rimbalzo al login dopo l'accesso.
+ */
+async function ensureAgentRow(
+  admin: SupabaseClient,
+  user: Pick<User, "id" | "email" | "user_metadata">
+): Promise<void> {
+  try {
+    const { data: existing } = await admin
+      .from("agents")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (existing) return;
+
+    const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+    const nome =
+      typeof meta.nome === "string" && meta.nome.trim()
+        ? meta.nome.trim()
+        : (user.email ?? "Agente");
+    const ruolo =
+      typeof meta.ruolo === "string" && meta.ruolo ? meta.ruolo : "agente";
+
+    await admin.from("agents").insert({
+      id: user.id,
+      email: user.email ?? "",
+      nome,
+      ruolo,
+    });
+  } catch {
+    // Se il trigger funziona la riga esiste già: qui si interviene solo
+    // quando manca, senza mai bloccare l'accesso in caso di errore.
+  }
+}
+
 export async function loginAction(
   _prev: AuthState,
   formData: FormData
@@ -48,9 +131,38 @@ export async function loginAction(
     };
   }
 
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  let { error } = await supabase.auth.signInWithPassword(parsed.data);
+
+  // Account esistente ma email non ancora confermata (progetto Supabase con
+  // "Confirm email" attivo). La password è già stata verificata da Supabase
+  // prima di questo errore, quindi possiamo attivare l'account qui (solo
+  // server, con la service role) e ripetere l'accesso automaticamente.
+  if (error && isEmailNotConfirmedError(error)) {
+    const admin = await createAdminClient();
+    if (admin && (await confirmUserEmail(admin, parsed.data.email))) {
+      const retry = await supabase.auth.signInWithPassword(parsed.data);
+      error = retry.error ?? null;
+    }
+  }
+
   if (error) {
+    if (isEmailNotConfirmedError(error)) {
+      return {
+        error:
+          "Account non ancora attivato: apri l'email di conferma ricevuta alla registrazione (controlla anche lo spam). Se non la trovi, contatta l'amministratore.",
+      };
+    }
     return { error: "Credenziali non valide. Controlla email e password e riprova." };
+  }
+
+  // Sessione creata: verifica che esista la riga agente (copre i casi in cui
+  // il trigger del database non è presente) e porta alla dashboard.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    const admin = await createAdminClient();
+    if (admin) await ensureAgentRow(admin, user);
   }
 
   redirect("/dashboard");
@@ -93,7 +205,7 @@ export async function registerAction(
     };
   }
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
@@ -105,10 +217,48 @@ export async function registerAction(
     return { error: "Registrazione non riuscita: " + error.message };
   }
 
-  return {
-    message:
-      "Registrazione inviata. Controlla la tua email per confermare l'account, poi accedi.",
-  };
+  // Se il progetto Supabase richiede la conferma via email, l'account appena
+  // creato non potrebbe accedere con le credenziali. Lo attiviamo SUBITO con
+  // la service role key (operazione SOLO server, mai nel browser): l'agente
+  // viene quindi fatto entrare direttamente nella dashboard.
+  const signedUser = data.user;
+  if (signedUser && !signedUser.email_confirmed_at) {
+    const admin = await createAdminClient();
+    if (admin) {
+      await admin.auth.admin.updateUserById(signedUser.id, {
+        email_confirm: true,
+      });
+    }
+  }
+
+  // Accesso immediato con le credenziali appena create.
+  const signIn = await supabase.auth.signInWithPassword({
+    email: parsed.data.email,
+    password: parsed.data.password,
+  });
+
+  if (signIn.error) {
+    if (isEmailNotConfirmedError(signIn.error)) {
+      return {
+        message:
+          "Account creato! Per attivarlo apri l'email di conferma che ti è stata inviata (controlla anche lo spam), poi accedi.",
+      };
+    }
+    return {
+      message:
+        "Registrazione riuscita. Ora puoi accedere con le credenziali appena create.",
+    };
+  }
+
+  const {
+    data: { user: me },
+  } = await supabase.auth.getUser();
+  if (me) {
+    const admin = await createAdminClient();
+    if (admin) await ensureAgentRow(admin, me);
+  }
+
+  redirect("/dashboard");
 }
 
 /**
