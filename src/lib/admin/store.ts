@@ -21,7 +21,7 @@ const DATA_DIR = appDataDir();
 const ADMIN_FILE = path.join(DATA_DIR, "admin.json");
 const ADMIN_SETTING_KEY = "admin_account";
 
-export const ADMIN_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const ADMIN_SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
 type AdminRecord = {
   email: string;

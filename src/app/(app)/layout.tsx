@@ -6,6 +6,7 @@ import { getLogos } from "@/lib/logos";
 import { AppNav } from "./nav";
 import { ScrollNav } from "./scroll-nav";
 import { DownloadCatalogButton } from "./download-catalog-button";
+import { SessionKeepAlive } from "@/components/session-keep-alive";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
       <section className="content-area">{children}</section>
       <ScrollNav />
+      <SessionKeepAlive />
     </div>
   );
 }

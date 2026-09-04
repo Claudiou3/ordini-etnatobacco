@@ -341,7 +341,7 @@ export async function loginDemo(): Promise<void> {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24,
+    maxAge: 365 * 24 * 60 * 60,
   });
   redirect("/dashboard");
 }
