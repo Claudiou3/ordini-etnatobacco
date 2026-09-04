@@ -14,6 +14,7 @@ import {
   round2,
   type ShippingSettings,
 } from "./shipping";
+import { memoized, invalidateMemo } from "@/lib/server-cache";
 
 /**
  * Impostazioni "Spese di spedizione" gestite dall'amministratore.
@@ -37,6 +38,10 @@ const SETTINGS_FILE = appDataPath("shipping-settings.json");
 const SETTINGS_SETTING_KEY = "shipping_settings";
 const WORKING_TEMPLATE = appDataPath("ordine_template.xlsx");
 const ROOT_TEMPLATE = appRootPath("ordine_template.xlsx");
+
+// Cache letta a ogni apertura/conferma di un ordine: TTL breve + invalidation.
+const SHIPPING_CACHE_KEY = "shipping-settings";
+const SHIPPING_CACHE_TTL_MS = 15_000;
 
 // Celle del template Excel usate per la spedizione (riferimenti 1-based):
 //   N291 (riga 291, colonna 14) = 0.029 → percentuale trasporto
@@ -168,23 +173,29 @@ function normalize(stored: Partial<StoredShipping>): ShippingSettings {
 
 /** Impostazioni correnti: Supabase (online), poi file, poi valori da Excel. */
 export async function getShippingSettings(): Promise<ShippingSettings> {
-  const remote = await getAppSetting<Partial<StoredShipping>>(
-    SETTINGS_SETTING_KEY
-  );
-  if (remote && remote.version === 1 && remote.percentuale) {
-    return normalize(remote);
-  }
-  try {
-    const raw = JSON.parse(
-      await fs.readFile(SETTINGS_FILE, "utf8")
-    ) as Partial<StoredShipping>;
-    if (raw && raw.version === 1 && raw.percentuale) {
-      return normalize(raw);
+  return memoized<ShippingSettings>(
+    SHIPPING_CACHE_KEY,
+    SHIPPING_CACHE_TTL_MS,
+    async () => {
+      const remote = await getAppSetting<Partial<StoredShipping>>(
+        SETTINGS_SETTING_KEY
+      );
+      if (remote && remote.version === 1 && remote.percentuale) {
+        return normalize(remote);
+      }
+      try {
+        const raw = JSON.parse(
+          await fs.readFile(SETTINGS_FILE, "utf8")
+        ) as Partial<StoredShipping>;
+        if (raw && raw.version === 1 && raw.percentuale) {
+          return normalize(raw);
+        }
+      } catch {
+        // file assente o non valido: si leggono i valori direttamente da Excel
+      }
+      return readFromExcel();
     }
-  } catch {
-    // file assente o non valido: si leggono i valori direttamente da Excel
-  }
-  return readFromExcel();
+  );
 }
 
 /** Sincronizza la Sezione 1 con il template Excel di lavoro (Storage o file locale). */
@@ -257,6 +268,9 @@ export async function saveShippingSettings(
     }
   }
 
+  // Valore salvato: la voce in cache non è più valida.
+  invalidateMemo(SHIPPING_CACHE_KEY);
+
   // Allinea il template Excel (Sezione 1) senza bloccare il salvataggio.
   let excelWarning: string | undefined;
   try {
@@ -306,6 +320,9 @@ export async function resetShippingSettings(): Promise<ResetShippingSettingsResu
       };
     }
   }
+
+  // Valore ripristinato: la voce in cache non è più valida.
+  invalidateMemo(SHIPPING_CACHE_KEY);
 
   let excelWarning: string | undefined;
   try {

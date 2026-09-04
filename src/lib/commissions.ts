@@ -4,6 +4,7 @@ import { getDataClient } from "@/lib/supabase/data";
 import { isSupabaseConfigured } from "@/lib/settings/runtime";
 import { appDataPath } from "@/lib/data-dir";
 import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
+import { memoized, invalidateMemo } from "@/lib/server-cache";
 import {
   demoGetOrders,
   demoGetOrderDetail,
@@ -35,6 +36,10 @@ export type {
 const RATES_FILE = appDataPath("commissions.json");
 const RATES_SETTING_KEY = "commission_rates";
 
+// Aliquote lette dalle pagine console/agenti: TTL breve + invalidazione al salvataggio.
+const RATES_CACHE_KEY = "commission-rates";
+const RATES_CACHE_TTL_MS = 30_000;
+
 const ZERO_RATES: CommissionRates = { occhiali: 0, espositori: 0, astucci: 0 };
 
 function clampRate(value: unknown): number {
@@ -53,18 +58,24 @@ function toRates(raw: unknown): CommissionRates {
 }
 
 export async function getCommissionRates(): Promise<CommissionRates> {
-  // 1) Supabase (online, filesystem in sola lettura).
-  const remote = await getAppSetting<CommissionRates>(RATES_SETTING_KEY);
-  if (remote) return toRates(remote);
-  // 2) File locale.
-  try {
-    const raw = JSON.parse(await fs.readFile(RATES_FILE, "utf8")) as Partial<
-      CommissionRates
-    >;
-    return toRates(raw);
-  } catch {
-    return { ...ZERO_RATES };
-  }
+  return memoized<CommissionRates>(
+    RATES_CACHE_KEY,
+    RATES_CACHE_TTL_MS,
+    async () => {
+      // 1) Supabase (online, filesystem in sola lettura).
+      const remote = await getAppSetting<CommissionRates>(RATES_SETTING_KEY);
+      if (remote) return toRates(remote);
+      // 2) File locale.
+      try {
+        const raw = JSON.parse(
+          await fs.readFile(RATES_FILE, "utf8")
+        ) as Partial<CommissionRates>;
+        return toRates(raw);
+      } catch {
+        return { ...ZERO_RATES };
+      }
+    }
+  );
 }
 
 export async function saveCommissionRates(
@@ -78,6 +89,8 @@ export async function saveCommissionRates(
       JSON.stringify({ ...toRates(rates), updatedAt: new Date().toISOString() }, null, 2)
     );
   }
+  // Aliquote aggiornate: la voce in cache non è più valida.
+  invalidateMemo(RATES_CACHE_KEY);
 }
 
 /** Quota di imponibile per gruppo, da una lista di voci (subtotale). */

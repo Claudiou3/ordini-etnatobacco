@@ -5,6 +5,7 @@ import { appDataPath, appRootPath } from "@/lib/data-dir";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
 import { ORDERS_BUCKET } from "@/lib/orders/storage";
+import { memoized, invalidateMemo } from "@/lib/server-cache";
 
 /**
  * Gestione dei LOGHI della piattaforma (lato amministratore).
@@ -24,6 +25,28 @@ const LOGOS_DIR = path.join(appRootPath("public"), "logos");
 const CONFIG_FILE = appDataPath("logos.json");
 const LOGOS_PREFIX = "logos";
 const LOGOS_CONFIG_SETTING_KEY = "logos_config";
+
+/**
+ * Cache dei loghi pronta per il carico simultaneo:
+ * - getLogos() (usato dal layout di OGNI pagina e dal manifest) leggeva a
+ *   ogni richiesta la config da Supabase + 3 chiamate storage.list.
+ * - Con TTL e single-flight, 100 agenti nello stesso istante fanno il lavoro
+ *   una volta sola; upload/eliminazione invalida subito la voce locale.
+ */
+const LOGOS_CACHE_KEY = "logos";
+const LOGOS_CACHE_TTL_MS = 20_000;
+const LOGO_FILE_CACHE_PREFIX = "logo-file:";
+const LOGO_FILE_CACHE_TTL_MS = 45_000;
+
+function logoFileCacheKey(file: string): string {
+  return LOGO_FILE_CACHE_PREFIX + file;
+}
+
+/** Invalida la cache dei loghi (tutti o solo il PNG indicato). */
+function invalidateLogoCache(position?: LogoPosition): void {
+  invalidateMemo(LOGOS_CACHE_KEY);
+  if (position) invalidateMemo(logoFileCacheKey(`logo-${position}.png`));
+}
 
 /** Misura standard: loghi pagina normalizzati a 200x200, icona app 512x512. */
 
@@ -178,15 +201,20 @@ async function localLogoInfo(
 /** PNG di un logo per la rotta /logo-files/[file]: Storage prima, poi locale. */
 export async function readLogoFile(file: string): Promise<Buffer | null> {
   if (!/^logo-[123]\.png$/.test(file)) return null;
-  const position: LogoPosition =
-    file === "logo-1.png" ? 1 : file === "logo-2.png" ? 2 : 3;
-  const remote = await downloadLogoFile(position);
-  if (remote) return remote;
-  try {
-    return await fs.readFile(path.join(LOGOS_DIR, file));
-  } catch {
-    return null;
-  }
+  // Il PNG viene riscaricato dallo Storage a ogni richiesta: con molti
+  // agenti la stessa immagine finiva scaricata decine di volte al secondo.
+  // In cache per 45 s; l'upload di un logo nuovo invalida subito la voce.
+  return memoized(logoFileCacheKey(file), LOGO_FILE_CACHE_TTL_MS, async () => {
+    const position: LogoPosition =
+      file === "logo-1.png" ? 1 : file === "logo-2.png" ? 2 : 3;
+    const remote = await downloadLogoFile(position);
+    if (remote) return remote;
+    try {
+      return await fs.readFile(path.join(LOGOS_DIR, file));
+    } catch {
+      return null;
+    }
+  });
 }
 
 /**
@@ -202,6 +230,7 @@ export async function deleteUploadedLogo(
     const config = await readConfig();
     delete config[`logo${position}`];
     await writeConfig(config);
+    invalidateLogoCache(position);
     return { ok: true };
   }
   try {
@@ -209,6 +238,7 @@ export async function deleteUploadedLogo(
     const config = await readConfig();
     delete config[`logo${position}`];
     await writeConfig(config);
+    invalidateLogoCache(position);
     return { ok: true };
   } catch {
     return { ok: false, error: "Impossibile eliminare il logo." };
@@ -221,45 +251,47 @@ export async function getLogos(): Promise<{
   logo2: LogoInfo;
   logo3: LogoInfo;
 }> {
-  const config = await readConfig();
-  const storage1 = await storageLogoInfo(1, config);
-  const storage2 = await storageLogoInfo(2, config);
-  const storage3 = await storageLogoInfo(3, config);
-  const logo1 =
-    storage1 !== null
-      ? {
-          src: `/logo-files/logo-1.png?v=${encodeURIComponent(storage1)}`,
-          present: true,
-          size: logoDisplaySize(config, 1),
-        }
-      : await localLogoInfo(1, config);
-  const logo2 =
-    storage2 !== null
-      ? {
-          src: `/logo-files/logo-2.png?v=${encodeURIComponent(storage2)}`,
-          present: true,
-          size: logoDisplaySize(config, 2),
-        }
-      : await localLogoInfo(2, config);
-  const logo3 =
-    storage3 !== null
-      ? {
-          src: `/logo-files/logo-3.png?v=${encodeURIComponent(storage3)}`,
-          present: true,
-          size: logoDisplaySize(config, 3),
-        }
-      : await localLogoInfo(3, config);
-  return {
-    logo1: logo1.present
-      ? logo1
-      : {
-          src: "/logo-detomaso.png",
-          present: true,
-          size: logoDisplaySize(config, 1),
-        },
-    logo2,
-    logo3,
-  };
+  return memoized(LOGOS_CACHE_KEY, LOGOS_CACHE_TTL_MS, async () => {
+    const config = await readConfig();
+    const storage1 = await storageLogoInfo(1, config);
+    const storage2 = await storageLogoInfo(2, config);
+    const storage3 = await storageLogoInfo(3, config);
+    const logo1 =
+      storage1 !== null
+        ? {
+            src: `/logo-files/logo-1.png?v=${encodeURIComponent(storage1)}`,
+            present: true,
+            size: logoDisplaySize(config, 1),
+          }
+        : await localLogoInfo(1, config);
+    const logo2 =
+      storage2 !== null
+        ? {
+            src: `/logo-files/logo-2.png?v=${encodeURIComponent(storage2)}`,
+            present: true,
+            size: logoDisplaySize(config, 2),
+          }
+        : await localLogoInfo(2, config);
+    const logo3 =
+      storage3 !== null
+        ? {
+            src: `/logo-files/logo-3.png?v=${encodeURIComponent(storage3)}`,
+            present: true,
+            size: logoDisplaySize(config, 3),
+          }
+        : await localLogoInfo(3, config);
+    return {
+      logo1: logo1.present
+        ? logo1
+        : {
+            src: "/logo-detomaso.png",
+            present: true,
+            size: logoDisplaySize(config, 1),
+          },
+      logo2,
+      logo3,
+    };
+  });
 }
 
 /**
@@ -285,6 +317,7 @@ export async function setLogoSize(
       size: Math.round(size),
     };
     await writeConfig(config);
+    invalidateLogoCache(position);
     return { ok: true };
   } catch {
     return {
@@ -338,6 +371,7 @@ export async function saveUploadedLogo(
   const uploaded = await uploadLogoFile(position, output);
   if (uploaded) {
     await writeConfig(config);
+    invalidateLogoCache(position);
     return { ok: true };
   }
 
@@ -346,6 +380,7 @@ export async function saveUploadedLogo(
     await fs.mkdir(LOGOS_DIR, { recursive: true });
     await fs.writeFile(path.join(LOGOS_DIR, `logo-${position}.png`), output);
     await writeConfig(config);
+    invalidateLogoCache(position);
     return { ok: true };
   } catch {
     return {

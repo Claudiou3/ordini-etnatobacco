@@ -8,6 +8,7 @@ import {
   downloadWorkingTemplate,
   uploadWorkingTemplate,
 } from "@/lib/orders/storage";
+import { memoized, invalidateMemo } from "@/lib/server-cache";
 
 /**
  * Gestione del catalogo contenuto in ordine_template.xlsx.
@@ -15,7 +16,23 @@ import {
  * - Modifica sconti (singoli o massivi) salvando su data/ordine_template.xlsx
  *   (il file originale nella root resta intatto).
  * Colonne (1-based): SCONTO=13, NETTO IVA ESCL=14, NETTO IVA INCL=15.
+ *
+ * CACHE (per il carico simultaneo): prima di questo modulo OGNI richiesta
+ * scaricava e riparsava l'intero file Excel (decine di migliaia di celle) e
+ * rileggeva gli override step4. Con TTL + single-flight 100 agenti nello
+ * stesso istante eseguono il parsing UNA volta sola; ogni salvataggio
+ * dell'amministratore (sconti/prezzi/step4) invalida subito la cache.
  */
+
+const CATALOG_ITEMS_CACHE_KEY = "catalog-items";
+const CATALOG_STEP4_CACHE_KEY = "catalog-step4";
+const CATALOG_CACHE_TTL_MS = 20_000;
+
+/** Invalida la cache degli articoli catalogo e degli override step4. */
+export function invalidateCatalogCache(): void {
+  invalidateMemo(CATALOG_ITEMS_CACHE_KEY);
+  invalidateMemo(CATALOG_STEP4_CACHE_KEY);
+}
 
 export type CatalogItem = {
   row: number; // riga 1-based nel foglio Excel
@@ -40,18 +57,25 @@ const STEP4_FILE = appDataPath("catalog-step4.json");
 const STEP4_SETTING_KEY = "catalog_step4";
 
 async function readStep4Overrides(): Promise<Record<number, boolean>> {
-  // 1) Supabase (online).
-  const remote = await getAppSetting<Record<number, boolean>>(STEP4_SETTING_KEY);
-  if (remote && typeof remote === "object") return remote;
-  // 2) File locale.
-  try {
-    return JSON.parse(await fs.readFile(STEP4_FILE, "utf8")) as Record<
-      number,
-      boolean
-    >;
-  } catch {
-    return {};
-  }
+  return memoized<Record<number, boolean>>(
+    CATALOG_STEP4_CACHE_KEY,
+    CATALOG_CACHE_TTL_MS,
+    async () => {
+      // 1) Supabase (online).
+      const remote = await getAppSetting<Record<number, boolean>>(
+        STEP4_SETTING_KEY
+      );
+      if (remote && typeof remote === "object") return remote;
+      // 2) File locale.
+      try {
+        return JSON.parse(
+          await fs.readFile(STEP4_FILE, "utf8")
+        ) as Record<number, boolean>;
+      } catch {
+        return {};
+      }
+    }
+  );
 }
 
 /**
@@ -72,6 +96,8 @@ export async function saveStep4(
     await fs.mkdir(path.dirname(STEP4_FILE), { recursive: true });
     await fs.writeFile(STEP4_FILE, JSON.stringify(overrides, null, 2));
   }
+  // Gli override sono cambiati: il catalogo (che li applica) va ricalcolato.
+  invalidateCatalogCache();
 }
 
 function templateFile(): string {
@@ -102,6 +128,8 @@ async function persistWorkbook(workbook: Workbook): Promise<void> {
     await fs.mkdir(path.dirname(WORKING_FILE), { recursive: true });
     await workbook.toFileAsync(WORKING_FILE);
   }
+  // Il file è cambiato: gli articoli in cache non sono più validi.
+  invalidateCatalogCache();
 }
 
 function toNumber(value: unknown): number {
@@ -144,46 +172,54 @@ function findHeaderIndex(rows: unknown[][]): number {
 }
 
 export async function readCatalog(): Promise<CatalogItem[]> {
-  const workbook = await openWorkbook().catch(() => null);
-  if (!workbook) return [];
-  const { startRow, rows } = readSheet(workbook);
-  const headerIdx = findHeaderIndex(rows);
-  if (headerIdx === -1) return [];
+  // Risultato condiviso tra richieste simultanee (stessa istanza) per TTL.
+  // Attenzione: i chiamanti NON devono mutare gli oggetti dell'array.
+  return memoized<CatalogItem[]>(
+    CATALOG_ITEMS_CACHE_KEY,
+    CATALOG_CACHE_TTL_MS,
+    async () => {
+      const workbook = await openWorkbook().catch(() => null);
+      if (!workbook) return [];
+      const { startRow, rows } = readSheet(workbook);
+      const headerIdx = findHeaderIndex(rows);
+      if (headerIdx === -1) return [];
 
-  const items: CatalogItem[] = [];
-  const step4Overrides = await readStep4Overrides();
-  for (let i = headerIdx + 1; i < rows.length; i++) {
-    const row = rows[i] ?? [];
-    const codice = String(row[3] ?? "").trim();
-    const descrizione = String(row[4] ?? "").trim();
-    if (!codice && !descrizione) break;
-    const prezzo = toNumber(row[8]);
-    const sconto = toNumber(row[12]);
-    const itemRow = startRow + i;
-    items.push({
-      row: itemRow,
-      brand: String(row[0] ?? "").trim(),
-      tipologia: String(row[1] ?? "").trim(),
-      modello: String(row[2] ?? "").trim(),
-      codice,
-      descrizione,
-      diottria: String(row[5] ?? "").trim(),
-      pezzi: toNumber(row[6]),
-      prezzo,
-      iva: parseIvaPerc(row[9]),
-      sconto,
-      // NETTO IVA ESCL. come da formula del template (N = I*(1-M)):
-      // NON si legge dal file perche' per molti articoli la cella e' vuota.
-      nettoEscl: round2(prezzo * (1 - sconto)),
-      // Multiplo di 4: decide l'amministratore (override); altrimenti regola
-      // automatica per descrizione (tutto tranne expo/kit/astucci).
-      step4:
-        step4Overrides[itemRow] !== undefined
-          ? step4Overrides[itemRow]
-          : !/(expo|kit|astuccio)/i.test(descrizione),
-    });
-  }
-  return items;
+      const items: CatalogItem[] = [];
+      const step4Overrides = await readStep4Overrides();
+      for (let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i] ?? [];
+        const codice = String(row[3] ?? "").trim();
+        const descrizione = String(row[4] ?? "").trim();
+        if (!codice && !descrizione) break;
+        const prezzo = toNumber(row[8]);
+        const sconto = toNumber(row[12]);
+        const itemRow = startRow + i;
+        items.push({
+          row: itemRow,
+          brand: String(row[0] ?? "").trim(),
+          tipologia: String(row[1] ?? "").trim(),
+          modello: String(row[2] ?? "").trim(),
+          codice,
+          descrizione,
+          diottria: String(row[5] ?? "").trim(),
+          pezzi: toNumber(row[6]),
+          prezzo,
+          iva: parseIvaPerc(row[9]),
+          sconto,
+          // NETTO IVA ESCL. come da formula del template (N = I*(1-M)):
+          // NON si legge dal file perche' per molti articoli la cella e' vuota.
+          nettoEscl: round2(prezzo * (1 - sconto)),
+          // Multiplo di 4: decide l'amministratore (override); altrimenti regola
+          // automatica per descrizione (tutto tranne expo/kit/astucci).
+          step4:
+            step4Overrides[itemRow] !== undefined
+              ? step4Overrides[itemRow]
+              : !/(expo|kit|astuccio)/i.test(descrizione),
+        });
+      }
+      return items;
+    }
+  );
 }
 
 /**

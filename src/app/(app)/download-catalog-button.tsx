@@ -19,8 +19,17 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
   const [open, setOpen] = useState(false);
 
   // Rilevamento dispositivo (valutato solo nel browser).
+  // Attenzione a iPadOS 13+: Safari su iPad dichiara "Macintosh" nello
+  // User-Agent, quindi il solo test su "ipad" non basta. Su iPad la
+  // superficie tattile (maxTouchPoints > 1) con UA "MacIntel"/"Macintosh"
+  // identifica un iPad: vanno mostrate le istruzioni iOS, non quelle da PC.
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  const isIos = /iphone|ipad|ipod/i.test(ua);
+  const isIos =
+    /iphone|ipad|ipod/i.test(ua) ||
+    (typeof navigator !== "undefined" &&
+      typeof navigator.maxTouchPoints === "number" &&
+      navigator.maxTouchPoints > 1 &&
+      /macintosh|mac intel|macppc/i.test(ua));
   const isAndroid = /android/i.test(ua);
 
   useEffect(() => {

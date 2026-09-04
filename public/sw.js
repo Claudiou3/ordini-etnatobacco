@@ -25,5 +25,13 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   // Interessa solo le richieste GET (le altre le lascia al browser).
   if (request.method !== "GET") return;
+  // Navigazioni di pagina (incluso l'avvio dell'app dall'icona sulla Home):
+  // NON intercettare. Se il Service Worker risponde alla navigazione di
+  // avvio, su iPhone/iPad la schermata può restare BIANCA o l'app bloccarsi
+  // (primo avvio dopo l'installazione, rete lenta, aggiornamento SW in
+  // corso). Il browser carica comunque la pagina da solo; la presenza del
+  // gestore "fetch" basta per rendere l'app installabile.
+  if (request.mode === "navigate") return;
+
   event.respondWith(fetch(request));
 });
