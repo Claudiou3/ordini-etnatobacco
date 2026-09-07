@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/settings/runtime";
-import { adminExists } from "@/lib/admin/store";
 import { getSessionUser } from "@/lib/supabase/session";
 import { getLogos } from "@/lib/logos";
 import { LoginForm } from "./login-form";
@@ -17,14 +16,6 @@ export default async function LoginPage() {
   ]);
   if (user) redirect("/dashboard");
 
-  const hasAdmin = await adminExists();
-
-  return (
-    <LoginForm
-      hasConfig={isConfig}
-      hasAdmin={hasAdmin}
-      logos={logos}
-    />
-  );
+  return <LoginForm hasConfig={isConfig} logos={logos} />;
 }
 
