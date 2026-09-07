@@ -137,3 +137,64 @@ export async function deleteAgentAction(
   revalidatePath("/dashboard");
   return { success: true, deletedOrders };
 }
+
+export type SetAgentStatusResult = {
+  error?: string;
+  success?: boolean;
+  stato?: "attivo" | "disattivato";
+};
+
+/**
+ * Disattiva o riattiva un agente (solo amministratore principale).
+ * Disattivato = non può più accedere né usare l'app, ma i suoi ordini e lo
+ * storico provvigioni vengono CONSERVATI (al contrario di "Elimina").
+ */
+export async function setAgentStatusAction(
+  formData: FormData
+): Promise<SetAgentStatusResult> {
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+
+  const agentId = String(formData.get("agentId") ?? "").trim();
+  const rawStato = String(formData.get("stato") ?? "").trim();
+  const stato = rawStato === "attivo" ? "attivo" : "disattivato";
+  if (!agentId) {
+    return { error: "Identificativo agente mancante." };
+  }
+
+  const supabase = await createAdminClient();
+  if (!supabase) {
+    return {
+      error: "Operazione disponibile solo con Supabase configurato (produzione).",
+    };
+  }
+
+  const { data: agent, error: loadError } = await supabase
+    .from("agents")
+    .select("id, ruolo")
+    .eq("id", agentId)
+    .maybeSingle();
+  if (loadError || !agent) {
+    return { error: "Agente non trovato." };
+  }
+  if (agent.ruolo !== "agente") {
+    return {
+      error: "Puoi disattivare solo account con ruolo agente (non admin/sub-admin).",
+    };
+  }
+
+  const { error: updError } = await supabase
+    .from("agents")
+    .update({ stato })
+    .eq("id", agentId);
+  if (updError) {
+    return { error: "Impossibile aggiornare lo stato: " + updError.message };
+  }
+
+  revalidatePath("/agenti");
+  revalidatePath("/console");
+  revalidatePath("/dashboard");
+  return { success: true, stato };
+}

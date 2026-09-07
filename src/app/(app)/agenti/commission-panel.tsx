@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { saveCommissionRatesAction } from "./actions";
 import { DeleteAgentButton } from "./delete-agent-button";
+import { AgentStatusButton } from "./agent-status-button";
 import {
   COMMISSION_GROUPS,
   type AgentCommissionData,
@@ -221,6 +222,11 @@ export function CommissionPanel({
                 <div className="agent-folder-body">
                   {canEdit && (
                     <div className="agent-folder-actions">
+                      <AgentStatusButton
+                        agentId={agent.id}
+                        nome={agent.nome}
+                        stato={agent.stato}
+                      />
                       <DeleteAgentButton
                         agentId={agent.id}
                         nome={agent.nome}

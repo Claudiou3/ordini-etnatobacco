@@ -163,6 +163,23 @@ export async function loginAction(
   if (user) {
     const admin = await createAdminClient();
     if (admin) await ensureAgentRow(admin, user);
+
+    // Account DISATTIVATO dall'amministratore: nessun accesso consentito.
+    try {
+      const { data: prof } = await supabase
+        .from("agents")
+        .select("stato")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (prof && prof.stato !== "attivo") {
+        await supabase.auth.signOut();
+        return {
+          error: "Account disattivato. Contatta l'amministratore.",
+        };
+      }
+    } catch {
+      // errore transitorio: si prosegue, la verifica definitiva è delle pagine
+    }
   }
 
   redirect("/dashboard");

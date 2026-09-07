@@ -1,10 +1,47 @@
 import { createServerClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { hasSupabaseConfig } from "./env";
 import {
   ADMIN_SESSION_COOKIE,
   SUBADMIN_SESSION_COOKIE,
 } from "@/lib/session-cookies";
+
+// Cache breve (30 s) dello stato agente per il Proxy: evita una query al DB
+// a ogni navigazione quando molti agenti sono collegati insieme.
+const agentStatusCache = new Map<string, { active: boolean; expires: number }>();
+const AGENT_STATUS_CACHE_TTL = 30_000;
+
+/**
+ * TRUE se l'agente Supabase è ancora "attivo" (riga in agents con stato
+ * attivo). Gli agenti DISATTIVATI dall'amministratore non devono poter usare
+ * l'app (nemmeno con una sessione già aperta). In caso di errore transitorio
+ * la richiesta passa: sono le pagine a fare la verifica definitiva.
+ */
+async function isAgentActive(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const now = Date.now();
+  const hit = agentStatusCache.get(userId);
+  if (hit && hit.expires > now) return hit.active;
+
+  let active = true;
+  try {
+    const { data, error } = await supabase
+      .from("agents")
+      .select("stato")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!error && data) active = data.stato === "attivo";
+  } catch {
+    // errore transitorio: lascia passare (le pagine controllano di nuovo)
+  }
+
+  if (agentStatusCache.size > 500) agentStatusCache.clear();
+  agentStatusCache.set(userId, { active, expires: now + AGENT_STATUS_CACHE_TTL });
+  return active;
+}
 
 /**
  * Aggiorna/verifica la sessione Supabase e protegge le route:
@@ -82,14 +119,20 @@ export async function updateSession(request: NextRequest) {
     request.cookies.has(ADMIN_SESSION_COOKIE) ||
     request.cookies.has(SUBADMIN_SESSION_COOKIE);
 
-  if (!user && !hasLocalAdminSession && !isAuthRoute) {
+  // Un agente DISATTIVATO non è considerato autenticato (pur avendo una
+  // sessione Supabase valida): viene rimandato al login senza loop.
+  let agentActive = true;
+  if (user) agentActive = await isAgentActive(supabase, user.id);
+  const effectiveUser = user && agentActive ? user : null;
+
+  if (!effectiveUser && !hasLocalAdminSession && !isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthRoute) {
+  if (effectiveUser && isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";

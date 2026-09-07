@@ -1193,7 +1193,15 @@ h2 { font-size: 21px; }
 .agent-folder-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: -2px 0 10px;
+}
+.agent-folder-actions .secondary-button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 7px;
 }
 .agent-delete-wrap {
   display: flex;

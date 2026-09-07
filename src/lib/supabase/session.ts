@@ -91,6 +91,24 @@ async function hasDemoSession(): Promise<boolean> {
   return Boolean(cookieStore.get(DEMO_COOKIE)?.value);
 }
 
+/** TRUE se l'agente Supabase risulta "attivo" (non disattivato dall'admin). */
+async function isAgentStatoAttivo(userId: string): Promise<boolean> {
+  const supabase = await createClient();
+  if (!supabase) return true;
+  try {
+    const { data } = await supabase
+      .from("agents")
+      .select("stato")
+      .eq("id", userId)
+      .maybeSingle();
+    // Riga assente o errore transitorio: comportamento prudente = lascia passare.
+    if (data) return data.stato === "attivo";
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 /** Legge la sessione admin locale (cookie firmato). */
 async function getAdminEmailFromSession(): Promise<string | null> {
   const cookieStore = await cookies();
@@ -137,7 +155,11 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   if (await getSubadminEmailFromSession()) return { id: "subadmin" };
 
   const supabaseUser = await getSupabaseUser();
-  if (supabaseUser) return supabaseUser;
+  if (supabaseUser) {
+    // Agente disattivato = non autenticato (nessun redirect verso la dashboard).
+    if (await isAgentStatoAttivo(supabaseUser.id)) return supabaseUser;
+    return null;
+  }
 
   if (await hasDemoSession()) return { id: "demo-agent" };
   return null;
@@ -174,7 +196,10 @@ export async function getCurrentAgent(): Promise<Agent | null> {
     .eq("id", user.id)
     .maybeSingle();
 
-  return (data as Agent | null) ?? null;
+  // Agente DISATTIVATO: nessun profilo utilizzabile (le pagine rimandano al login).
+  if (!data) return null;
+  if (data.stato !== "attivo") return null;
+  return data as Agent;
 }
 
 /**
