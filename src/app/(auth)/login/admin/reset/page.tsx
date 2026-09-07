@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/supabase/session";
 import { ResetAdminPasswordForm } from "./reset-admin-form";
 
 export const metadata = {
@@ -15,13 +14,13 @@ export default async function ResetAdminPasswordPage({
   const token = params.token ?? "";
   const email = params.email ?? "";
 
-  // Link valido solo se arrivato dall'email di recupero (token + email).
+  // La pagina si apre SOLO con il link ricevuto via email (token + email).
+  // Niente redirect alla dashboard se l'admin è già loggato: altrimenti il
+  // link di reset non potrebbe mai essere usato da una sessione aperta.
+  // La sicurezza resta nel token monouso legato all'email dell'account.
   if (!token || !email) {
     redirect("/login/admin");
   }
-
-  const user = await getSessionUser();
-  if (user) redirect("/dashboard");
 
   return <ResetAdminPasswordForm token={token} email={email} />;
 }
