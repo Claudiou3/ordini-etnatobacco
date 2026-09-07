@@ -141,11 +141,6 @@ export type IncentiveActionState = {
   success?: boolean;
 };
 
-const MONTH_NAMES = [
-  "Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
-  "Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre",
-];
-
 /**
  * Salva il PIANO INCENTIVANTE (solo amministratore principale).
  * Campi: obiettivo imponibile (€), mese/anno, premio (€).
@@ -206,6 +201,4 @@ export async function clearIncentivePlanAction(
   revalidatePath("/dashboard");
   return { success: true };
 }
-
-export { MONTH_NAMES };
 
