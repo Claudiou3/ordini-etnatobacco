@@ -9,7 +9,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   ADMIN_SESSION_COOKIE,
   ADMIN_SESSION_TTL_MS,
+  completeAdminPasswordReset,
   createAdmin,
+  createAdminPasswordResetToken,
   createAdminSessionToken,
   getAdminSessionKey,
   verifyAdmin,
@@ -19,6 +21,7 @@ import {
   SUBADMIN_SESSION_COOKIE,
   localSessionCookieOptions,
 } from "@/lib/supabase/session";
+import { sendOrderEmail } from "@/lib/email/send";
 
 const DEMO_COOKIE = "ioi_demo_session";
 
@@ -375,3 +378,170 @@ export async function logoutAction(): Promise<void> {
   }
   redirect("/login");
 }
+
+export type ResetPasswordState = {
+  error?: string;
+  message?: string;
+};
+
+/**
+ * "Password dimenticata?" (AGENTI): invia il link di reset tramite Supabase
+ * Auth alla casella indicata. Il link riporta al nostro sito dove l'agente
+ * potrà impostare la nuova password. Nessun altro può cambiarla al suo posto.
+ */
+export async function requestAgentPasswordReset(
+  _prev: ResetPasswordState,
+  formData: FormData
+): Promise<ResetPasswordState> {
+  const email = String(formData.get("email") ?? "").trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: "Inserisci un indirizzo email valido." };
+  }
+  const origin =
+    String(formData.get("origin") ?? "").trim() ||
+    "https://ordini-etnatobacco.vercel.app";
+
+  const supabase = await createClient();
+  if (!supabase) {
+    return {
+      error: "Recupero password non disponibile (Supabase non configurato).",
+    };
+  }
+
+  const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(
+    "/cambia-password"
+  )}`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+  if (error) {
+    return { error: "Impossibile inviare il link: " + error.message };
+  }
+
+  // Risposta generica: non riveliamo se l'email esiste o no.
+  return {
+    message:
+      "Se l'email è registrata riceverai a breve un messaggio con il link per reimpostare la password.",
+  };
+}
+
+/**
+ * Imposta la NUOVA password dell'agente dopo il reset via email.
+ * La sessione di recupero è stata creata dal link ricevuto per email.
+ */
+export async function updateAgentPasswordAction(
+  _prev: ResetPasswordState,
+  formData: FormData
+): Promise<ResetPasswordState> {
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (password.length < 8) {
+    return { error: "La nuova password deve avere almeno 8 caratteri." };
+  }
+  if (password !== confirm) {
+    return { error: "Le password non coincidono." };
+  }
+
+  const supabase = await createClient();
+  if (!supabase) {
+    return { error: "Operazione non disponibile (Supabase non configurato)." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    if (error.message.toLowerCase().includes("no user")) {
+      return {
+        error:
+          "Sessione di recupero non valida o scaduta: apri di nuovo il link ricevuto via email.",
+      };
+    }
+    return { error: "Impossibile aggiornare la password: " + error.message };
+  }
+
+  // La password è cambiata: chiudi la sessione e fai accedere con la nuova.
+  await supabase.auth.signOut().catch(() => null);
+  return {
+    message:
+      "Password aggiornata con successo. Ora puoi accedere con la nuova password.",
+  };
+}
+
+/**
+ * "Password dimenticata?" (AMMINISTRATORE): genera un token monouso (30 min)
+ * e invia il link via email (canale SMTP configurato). Solo chi possiede la
+ * casella email dell'amministratore può cambiare la password.
+ */
+export async function requestAdminPasswordReset(
+  _prev: ResetPasswordState,
+  formData: FormData
+): Promise<ResetPasswordState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: "Inserisci un indirizzo email valido." };
+  }
+  const origin =
+    String(formData.get("origin") ?? "").trim() ||
+    "https://ordini-etnatobacco.vercel.app";
+
+  const created = await createAdminPasswordResetToken(email);
+  if (!created.ok || !created.token) {
+    // Non rivelare se l'email esiste: messaggio generico ma segnala il problema.
+    return {
+      error:
+        created.error && !created.error.toLowerCase().includes("non configurato")
+          ? "Controlla di aver inserito l'email corretta dell'amministratore."
+          : created.error ??
+            "Impossibile avviare il recupero: contatta l'assistenza.",
+    };
+  }
+
+  const resetUrl = `${origin}/login/admin/reset?token=${encodeURIComponent(
+    created.token
+  )}&email=${encodeURIComponent(email)}`;
+
+  const sent = await sendOrderEmail({
+    to: email,
+    subject: "Recupero password amministratore — Ordini",
+    text: `Hai richiesto di reimpostare la password dell'amministratore.\n\nApri questo link entro 30 minuti per scegliere la nuova password:\n${resetUrl}\n\nSe non hai richiesto tu il cambio, ignora questa email.\n\n— Ordini IOI`,
+  });
+
+  if (!sent.sent) {
+    return {
+      error:
+        "Link generato ma invio email non riuscito: " +
+        (sent.error ?? "canale email non configurato"),
+    };
+  }
+
+  return {
+    message:
+      "Controlla la tua email: ti abbiamo inviato il link per reimpostare la password (valido 30 minuti).",
+  };
+}
+
+/** Completa il reset della password dell'amministratore usando il token email. */
+export async function completeAdminPasswordResetAction(
+  _prev: ResetPasswordState,
+  formData: FormData
+): Promise<ResetPasswordState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const token = String(formData.get("token") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (password.length < 8) {
+    return { error: "La nuova password deve avere almeno 8 caratteri." };
+  }
+  if (password !== confirm) {
+    return { error: "Le password non coincidono." };
+  }
+
+  const result = await completeAdminPasswordReset(email, token, password);
+  if (!result.ok) {
+    return { error: result.error ?? "Reset non riuscito." };
+  }
+  return {
+    message:
+      "Password amministratore aggiornata. Ora puoi accedere con la nuova password.",
+  };
+}
+

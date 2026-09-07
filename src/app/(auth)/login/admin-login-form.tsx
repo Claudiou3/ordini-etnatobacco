@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { adminLogin, type AuthState } from "../actions";
 import { PasswordField } from "@/components/password-field";
@@ -48,6 +49,9 @@ export function AdminLoginForm() {
           {pending ? "Accesso…" : "Accedi"}
         </button>
       </form>
+      <p className="auth-switch">
+        <Link href="/recupero-password-admin">Password dimenticata?</Link>
+      </p>
     </div>
   );
 }

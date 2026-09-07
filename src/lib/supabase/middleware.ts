@@ -69,6 +69,9 @@ export async function updateSession(request: NextRequest) {
   const isPublicAsset =
     pathname.startsWith("/manifest.webmanifest") ||
     pathname.startsWith("/sw.js") ||
+    pathname.startsWith("/auth/callback") ||
+    pathname.startsWith("/recupero-password") ||
+    pathname.startsWith("/cambia-password") ||
     /\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/.test(pathname);
   if (isPublicAsset) return NextResponse.next({ request });
 

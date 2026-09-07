@@ -20,6 +20,10 @@ export { ADMIN_SESSION_COOKIE } from "@/lib/session-cookies";
 const DATA_DIR = appDataDir();
 const ADMIN_FILE = path.join(DATA_DIR, "admin.json");
 const ADMIN_SETTING_KEY = "admin_account";
+// Token di reset password amministratore (via email): monouso, 30 minuti.
+const ADMIN_RESET_FILE = path.join(DATA_DIR, "admin-reset.json");
+const ADMIN_RESET_SETTING_KEY = "admin_reset";
+const ADMIN_RESET_TTL_MS = 30 * 60 * 1000;
 
 export const ADMIN_SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -192,5 +196,140 @@ export function verifyAdminSessionToken(token: string, key: Buffer): string | nu
   } catch {
     return null;
   }
+}
+
+type AdminResetEntry = {
+  email: string;
+  tokenHash: string;
+  expiresAt: number;
+};
+
+async function readResetEntry(): Promise<AdminResetEntry | null> {
+  const remote = await getAppSetting<AdminResetEntry>(ADMIN_RESET_SETTING_KEY);
+  if (remote?.tokenHash && remote?.email) return remote;
+  try {
+    return JSON.parse(
+      await fs.readFile(ADMIN_RESET_FILE, "utf8")
+    ) as AdminResetEntry;
+  } catch {
+    return null;
+  }
+}
+
+async function writeResetEntry(entry: AdminResetEntry): Promise<boolean> {
+  const saved = await setAppSetting(ADMIN_RESET_SETTING_KEY, entry);
+  if (saved) return true;
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.writeFile(ADMIN_RESET_FILE, JSON.stringify(entry, null, 2), {
+      mode: 0o600,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function clearResetEntry(): Promise<void> {
+  // Invalidazione su Supabase + tentativo di rimozione del file locale.
+  try {
+    await setAppSetting(ADMIN_RESET_SETTING_KEY, null);
+  } catch {
+    // ignore
+  }
+  try {
+    await fs.rm(ADMIN_RESET_FILE, { force: true });
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Crea il token monouso per il reset password dell'amministratore.
+ * Ritorna il token SOLO se l'email corrisponde all'account configurato:
+ * il chiamante lo userà per inviare il link via email (nessun altro può
+ * cambiare la password dell'amministratore).
+ */
+export async function createAdminPasswordResetToken(
+  email: string
+): Promise<{ ok: boolean; token?: string; error?: string }> {
+  const record = await readAdminRecord();
+  if (!record) {
+    return { ok: false, error: "Amministratore non configurato." };
+  }
+  const normalized = email.trim().toLowerCase();
+  if (record.email !== normalized) {
+    return { ok: false, error: "Email non corrispondente all'account amministratore." };
+  }
+
+  const token = crypto.randomBytes(24).toString("base64url");
+  const entry: AdminResetEntry = {
+    email: normalized,
+    tokenHash: crypto.createHash("sha256").update(token).digest("hex"),
+    expiresAt: Date.now() + ADMIN_RESET_TTL_MS,
+  };
+  if (!(await writeResetEntry(entry))) {
+    return {
+      ok: false,
+      error:
+        "Impossibile salvare la richiesta di reset (file system non scrivibile o Supabase non raggiungibile).",
+    };
+  }
+  return { ok: true, token };
+}
+
+/**
+ * Verifica il token e imposta la NUOVA password dell'amministratore.
+ * Monouso: dopo l'uso (o alla scadenza) il token non è più valido.
+ */
+export async function completeAdminPasswordReset(
+  email: string,
+  token: string,
+  newPassword: string
+): Promise<{ ok: boolean; error?: string }> {
+  const entry = await readResetEntry();
+  const emailNorm = email.trim().toLowerCase();
+  if (!entry || entry.email !== emailNorm) {
+    return { ok: false, error: "Richiesta non valida: ripeti la procedura." };
+  }
+  const expected = crypto.createHash("sha256").update(token).digest("hex");
+  const provided = Buffer.from(expected, "hex");
+  const stored = Buffer.from(entry.tokenHash, "hex");
+  if (
+    provided.length !== stored.length ||
+    !crypto.timingSafeEqual(provided, stored)
+  ) {
+    return { ok: false, error: "Link non valido: ripeti la procedura." };
+  }
+  if (entry.expiresAt < Date.now()) {
+    return { ok: false, error: "Link scaduto: richiedi un nuovo reset." };
+  }
+
+  const record = await readAdminRecord();
+  if (!record || record.email !== emailNorm) {
+    return { ok: false, error: "Account amministratore non trovato." };
+  }
+  if (newPassword.length < 8) {
+    return { ok: false, error: "La nuova password deve avere almeno 8 caratteri." };
+  }
+
+  const salt = crypto.randomBytes(16).toString("hex");
+  const updated: AdminRecord = {
+    email: record.email,
+    salt,
+    hash: hashPassword(newPassword, salt),
+    createdAt: record.createdAt,
+  };
+  try {
+    await writeAdminRecord(updated);
+  } catch {
+    return {
+      ok: false,
+      error:
+        "Impossibile salvare la nuova password (file system non scrivibile o Supabase non raggiungibile).",
+    };
+  }
+  await clearResetEntry();
+  return { ok: true };
 }
 

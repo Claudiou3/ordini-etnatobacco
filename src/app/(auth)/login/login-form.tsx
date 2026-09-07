@@ -98,6 +98,9 @@ export function LoginForm({
               {pending ? "Accesso in corso…" : "Accedi"}
             </button>
           </form>
+          <p className="auth-switch">
+            <Link href="/recupero-password">Password dimenticata?</Link>
+          </p>
         </>
       )}
 
