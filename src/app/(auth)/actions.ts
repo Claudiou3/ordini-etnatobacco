@@ -385,6 +385,20 @@ export type ResetPasswordState = {
 };
 
 /**
+ * Base URL usata nei link di reset inviati via email. MAI il localhost:
+ * si usa la variabile d'ambiente NEXT_PUBLIC_SITE_URL se presente, altrimenti
+ * l'indirizzo di produzione. In questo modo il link nella email funziona
+ * sempre (anche se la richiesta è partita da un PC di sviluppo).
+ */
+function siteBaseUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL;
+  if (fromEnv && fromEnv.trim() !== "") {
+    return fromEnv.trim().replace(/\/+$/, "");
+  }
+  return "https://ordini-etnatobacco.vercel.app";
+}
+
+/**
  * "Password dimenticata?" (AGENTI): invia il link di reset tramite Supabase
  * Auth alla casella indicata. Il link riporta al nostro sito dove l'agente
  * potrà impostare la nuova password. Nessun altro può cambiarla al suo posto.
@@ -397,9 +411,6 @@ export async function requestAgentPasswordReset(
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { error: "Inserisci un indirizzo email valido." };
   }
-  const origin =
-    String(formData.get("origin") ?? "").trim() ||
-    "https://ordini-etnatobacco.vercel.app";
 
   const supabase = await createClient();
   if (!supabase) {
@@ -408,7 +419,7 @@ export async function requestAgentPasswordReset(
     };
   }
 
-  const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(
+  const redirectTo = `${siteBaseUrl()}/auth/callback?next=${encodeURIComponent(
     "/cambia-password"
   )}`;
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -479,9 +490,6 @@ export async function requestAdminPasswordReset(
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { error: "Inserisci un indirizzo email valido." };
   }
-  const origin =
-    String(formData.get("origin") ?? "").trim() ||
-    "https://ordini-etnatobacco.vercel.app";
 
   const created = await createAdminPasswordResetToken(email);
   if (!created.ok || !created.token) {
@@ -495,7 +503,7 @@ export async function requestAdminPasswordReset(
     };
   }
 
-  const resetUrl = `${origin}/login/admin/reset?token=${encodeURIComponent(
+  const resetUrl = `${siteBaseUrl()}/login/admin/reset?token=${encodeURIComponent(
     created.token
   )}&email=${encodeURIComponent(email)}`;
 
