@@ -1135,3 +1135,57 @@ h2 { font-size: 21px; }
   .brand-mark { padding: 6px 10px; }
 }
 
+
+/* ============ Pannello "VUOI INSERIRE L'OMAGGIO?" (nuovo sistema 1..10 paia) ============ */
+.omaggio-panel {
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: var(--primary-soft);
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+.omaggio-panel h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--primary);
+  letter-spacing: 0.02em;
+}
+.omaggio-help {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.omaggio-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.omaggio-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+.omaggio-options label.is-checked {
+  border-color: var(--primary);
+  background: #fff;
+  color: var(--primary);
+}
+.omaggio-options input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+.omaggio-pcs {
+  max-width: 240px;
+}
+

@@ -94,6 +94,13 @@ export function NewOrderForm({
   // ----- INVIO -----
   const [orderResult, setOrderResult] = useState<SubmitOrderResult | null>(null);
   const [sending, setSending] = useState(false);
+  // ----- NUOVO SISTEMA OMAGGIO (jolly "paia di occhiali") -----
+  // Dopo "ORDINE COMPLETATO" si chiede se inserire l'omaggio (SI/NO) e, in
+  // caso affermativo, quante paia di occhiali (1..10). Niente più scelta di
+  // articoli specifici: il numero compare nel campo note del file Excel.
+  const [askOmaggio, setAskOmaggio] = useState(false);
+  const [omaggioSi, setOmaggioSi] = useState(false);
+  const [omaggioPcs, setOmaggioPcs] = useState(1);
   // ----- SALVATAGGIO ANANAGRAFICA CLIENTE -----
   const [savingAnagrafica, setSavingAnagrafica] = useState(false);
   const [anagraficaMsg, setAnagraficaMsg] = useState<{
@@ -170,10 +177,21 @@ export function NewOrderForm({
     return `Per inviare serve: ${reasons.join("; ")}.`;
   }
 
-  function handleSubmit() {
+  function handleSubmit(withOmaggio: boolean, paia: number) {
     if (!canSubmit()) return;
     setSending(true);
     setOrderResult(null);
+    // Chiude il pannello omaggio: al termine si mostra il risultato qui sotto.
+    setAskOmaggio(false);
+
+    // Nuovo sistema omaggio: si annota SOLO il numero di paia nel campo note
+    // ("5 paia di occhiali omaggio"). L'elenco articoli-omaggio (vecchio
+    // sistema) viene inviato vuoto.
+    const noteParts = [fields.note.trim()];
+    const paiaClean = Math.min(10, Math.max(1, Math.floor(paia) || 1));
+    if (withOmaggio) noteParts.push(`${paiaClean} paia di occhiali omaggio`);
+    const finalNote = noteParts.filter(Boolean).join("\n");
+
     startTransition(async () => {
       try {
         const res = await submitOrder({
@@ -191,13 +209,11 @@ export function NewOrderForm({
           },
           data_ordine: dataOrdine,
           pagamento: fields.pagamento,
-          note: fields.note,
+          note: finalNote,
           items: Object.entries(quantities)
             .filter(([, qty]) => (qty ?? 0) > 0)
             .map(([row, qty]) => ({ row: Number(row), qty })),
-          gift: giftLines
-            .filter((l) => l.row > 0 && isValidGiftQty(l.qty))
-            .map((l) => ({ row: l.row, qty: l.qty })),
+          gift: [],
         });
         setOrderResult(res);
       } catch (err) {
@@ -927,7 +943,16 @@ export function NewOrderForm({
         )}
       </section>
 
-      <section className="content-panel">
+      {/* VECCHIO sistema omaggi (scelta articoli): nascosto e disattivato.
+          Sostituito dal nuovo pannello "VUOI INSERIRE L'OMAGGIO?" (1..10
+          paia di occhiali, riportate nel campo note). Il codice resta nel
+          file solo per non perdere la storia; non è più visibile né usato. */}
+      <section
+        className="content-panel"
+        hidden
+        style={{ display: "none" }}
+        aria-hidden="true"
+      >
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Passo 4 — Omaggio</p>
@@ -1176,24 +1201,104 @@ export function NewOrderForm({
           </div>
         </div>
 
-        {!canSubmit() && (
+        {!canSubmit() && !askOmaggio && (
           <p className="form-error" role="alert">
             {missingHint()}
           </p>
         )}
 
-        <div className="form-actions">
-          <button
-            className="primary-button"
-            type="button"
-            onClick={handleSubmit}
-            disabled={!canSubmit()}
+        {!askOmaggio ? (
+          <div className="form-actions">
+            <button
+              className="green-button"
+              type="button"
+              onClick={() => {
+                if (!canSubmit()) return;
+                setOmaggioSi(false);
+                setOmaggioPcs(1);
+                setAskOmaggio(true);
+              }}
+              disabled={!canSubmit() || sending}
+            >
+              ORDINE COMPLETATO
+            </button>
+          </div>
+        ) : (
+          <div
+            className="omaggio-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Vuoi inserire l'omaggio?"
           >
-            {sending
-              ? "Invio in corso…"
-              : `Invia ordine${totals.totale > 0 ? ` · ${formatEur(totals.totale)}` : ""}`}
-          </button>
-        </div>
+            <h3>VUOI INSERIRE L&apos;OMAGGIO?</h3>
+            <p className="omaggio-help">
+              {omaggioSi
+                ? `Nel campo note del modulo comparirà: "${omaggioPcs} ${
+                    omaggioPcs === 1 ? "paio" : "paia"
+                  } di occhiali omaggio".`
+                : "Scegliendo NO non verrà aggiunto alcun omaggio all'ordine."}
+            </p>
+
+            <div className="omaggio-options" role="radiogroup">
+              <label className={omaggioSi ? "" : "is-checked"}>
+                <input
+                  type="radio"
+                  name="omaggio-choice"
+                  checked={!omaggioSi}
+                  onChange={() => setOmaggioSi(false)}
+                />
+                <span>NO</span>
+              </label>
+              <label className={omaggioSi ? "is-checked" : ""}>
+                <input
+                  type="radio"
+                  name="omaggio-choice"
+                  checked={omaggioSi}
+                  onChange={() => setOmaggioSi(true)}
+                />
+                <span>SÌ</span>
+              </label>
+            </div>
+
+            {omaggioSi && (
+              <label className="form-field omaggio-pcs">
+                <span className="form-label">
+                  PAIA DI OCCHIALI (da 1 a 10)
+                </span>
+                <select
+                  className="form-input"
+                  value={omaggioPcs}
+                  onChange={(e) => setOmaggioPcs(Number(e.target.value))}
+                >
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {n} {n === 1 ? "paio" : "paia"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            <div className="form-actions">
+              <button
+                className="primary-button"
+                type="button"
+                disabled={sending}
+                onClick={() => handleSubmit(omaggioSi, omaggioPcs)}
+              >
+                {sending ? "Invio in corso…" : "INVIA ORDINE"}
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={sending}
+                onClick={() => setAskOmaggio(false)}
+              >
+                Indietro
+              </button>
+            </div>
+          </div>
+        )}
 
         {orderResult?.error && (
           <p className="form-error" role="alert">
