@@ -129,6 +129,22 @@ async function imponibileMonth(
   );
 }
 
+/** Elimina il piano incentivante corrente (Supabase o file locale). */
+export async function deleteIncentivePlan(): Promise<boolean> {
+  invalidateMemo(CACHE_KEY);
+  try {
+    await setAppSetting(SETTINGS_KEY, null);
+  } catch {
+    // si prosegue con la rimozione del file locale
+  }
+  try {
+    await fs.rm(SETTINGS_FILE, { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export type IncentiveAgentView = {
   plan: IncentivePlan;
   current: number;

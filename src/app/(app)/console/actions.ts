@@ -14,6 +14,7 @@ import {
 } from "@/lib/subadmin/store";
 import {
   saveIncentivePlan,
+  deleteIncentivePlan,
   type IncentivePlan,
 } from "@/lib/incentive";
 
@@ -179,6 +180,28 @@ export async function saveIncentivePlanAction(
   const result = await saveIncentivePlan(plan);
   if (!result.ok) return { error: result.error ?? "Errore durante il salvataggio." };
 
+  revalidatePath("/console");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+/** Elimina il piano incentivante (solo amministratore principale). */
+export async function clearIncentivePlanAction(
+  _prev: IncentiveActionState,
+  _formData: FormData
+): Promise<IncentiveActionState> {
+  void _prev;
+  void _formData;
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+  const ok = await deleteIncentivePlan();
+  if (!ok) {
+    return {
+      error: "Impossibile eliminare il piano (riprova tra qualche secondo).",
+    };
+  }
   revalidatePath("/console");
   revalidatePath("/dashboard");
   return { success: true };

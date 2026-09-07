@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useActionState } from "react";
-import { saveIncentivePlanAction, type IncentiveActionState } from "./actions";
+import {
+  saveIncentivePlanAction,
+  clearIncentivePlanAction,
+  type IncentiveActionState,
+} from "./actions";
 import type { IncentivePlan, AgentIncentiveRank } from "@/lib/incentive";
 import { formatEur } from "@/lib/format";
 
@@ -50,6 +54,10 @@ export function IncentivePanel({
     IncentiveActionState,
     FormData
   >(saveIncentivePlanAction, {});
+  const [delState, delFormAction, delPending] = useActionState<
+    IncentiveActionState,
+    FormData
+  >(clearIncentivePlanAction, {});
 
   return (
     <section className="content-panel">
@@ -156,7 +164,39 @@ export function IncentivePanel({
             >
               {pending ? "Salvataggio…" : plan ? "Aggiorna piano" : "Crea piano"}
             </button>
+            {plan && (
+              <form
+                action={delFormAction}
+                onSubmit={(event) => {
+                  if (
+                    !window.confirm(
+                      "Eliminare il piano incentivante? Gli agenti non vedranno più obiettivo e premio."
+                    )
+                  ) {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                <button
+                  className="danger-button"
+                  type="submit"
+                  disabled={delPending}
+                >
+                  {delPending ? "Eliminazione…" : "Elimina piano"}
+                </button>
+              </form>
+            )}
           </div>
+          {delState?.error && (
+            <p className="form-error" role="alert">
+              {delState.error}
+            </p>
+          )}
+          {delState?.success && (
+            <p className="form-note" role="status">
+              Piano incentivante eliminato.
+            </p>
+          )}
         </form>
       )}
 
