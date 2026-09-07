@@ -7,6 +7,7 @@ import {
   countUnreadAdminOrders,
 } from "@/lib/orders";
 import { getReadOrderIds } from "@/lib/orders/read";
+import { getAgentIncentiveView, monthLabel } from "@/lib/incentive";
 import { formatEur, formatDate } from "@/lib/format";
 import { LogoutButton } from "../logout-button";
 import { NewOrderPopup } from "../console/new-order-popup";
@@ -39,6 +40,23 @@ export default async function DashboardPage() {
     unreadCount = count;
   }
 
+  // Lato agente: piano incentivante (obiettivo del mese + avanzamento).
+  let incentiveView: Awaited<
+    ReturnType<typeof getAgentIncentiveView>
+  > = null;
+  if (!isAdmin) {
+    incentiveView = await getAgentIncentiveView(agent.id);
+  }
+  const incentivePercent = incentiveView
+    ? Math.min(
+        100,
+        Math.round((incentiveView.current / incentiveView.plan.target) * 100)
+      )
+    : 0;
+  const incentiveReached = Boolean(
+    incentiveView && incentiveView.current >= incentiveView.plan.target
+  );
+
   return (
     <>
       {isAdmin && <NewOrderPopup initialUnread={unreadCount} />}
@@ -62,6 +80,61 @@ export default async function DashboardPage() {
           Nuovo ordine <span aria-hidden="true">-&gt;</span>
         </Link>
       </section>
+
+      {incentiveView && (
+        <section className="content-panel incentive-agent">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Piano incentivante</p>
+              <h2>{monthLabel(incentiveView.plan.month)}</h2>
+            </div>
+          </div>
+
+          <div className="incentive-agent-grid">
+            <div>
+              <span className="stat-label">Obiettivo del mese (imponibile)</span>
+              <strong className="incentive-target">
+                {formatEur(incentiveView.plan.target)}
+              </strong>
+            </div>
+            <div>
+              <span className="stat-label">Premio</span>
+              <strong className="incentive-prize">
+                {formatEur(incentiveView.plan.prize)}
+              </strong>
+            </div>
+            <div>
+              <span className="stat-label">Raggiunto finora</span>
+              <strong>{formatEur(incentiveView.current)}</strong>
+            </div>
+          </div>
+
+          <div
+            className="incentive-track"
+            role="progressbar"
+            aria-valuenow={incentivePercent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <span style={{ width: `${incentivePercent}%` }} />
+          </div>
+          <p className="incentive-percent">{incentivePercent}%</p>
+
+          {incentiveReached ? (
+            <p className="form-note incentive-ok" role="status">
+              🎉 Obiettivo raggiunto! Premi:{" "}
+              <strong>{formatEur(incentiveView.plan.prize)}</strong>
+            </p>
+          ) : (
+            <p className="incentive-missing">
+              Ti mancano{" "}
+              <strong>{formatEur(incentiveView.missing)}</strong> di imponibile
+              per raggiungere l&apos;obiettivo del mese. (Solo merce: gli
+              ordini annullati non contano.)
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="stats-grid" aria-label="Riepilogo">
         <article className="stat-card">

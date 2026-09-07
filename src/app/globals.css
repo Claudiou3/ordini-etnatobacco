@@ -1247,4 +1247,125 @@ h2 { font-size: 21px; }
   }
 }
 
+/* ============ PIANO INCENTIVANTE (Consolle + Dashboard agente) ============ */
+.incentive-summary {
+  margin-top: 4px;
+}
+.incentive-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.incentive-form .form-grid.incentive-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.incentive-top {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+.incentive-top h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+.incentive-top-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #f8fafc;
+}
+.incentive-rank {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--primary);
+  flex: none;
+}
+.incentive-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.incentive-name small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.incentive-amount {
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+/* Sezione agente (Dashboard) */
+.incentive-agent {
+  margin-bottom: 18px;
+}
+.incentive-agent-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 6px 0 14px;
+}
+.incentive-agent-grid > div {
+  display: grid;
+  gap: 4px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.incentive-agent-grid strong {
+  font-size: 20px;
+  color: var(--ink);
+}
+.incentive-target {
+  color: var(--primary) !important;
+}
+.incentive-prize {
+  color: var(--success) !important;
+}
+.incentive-track {
+  height: 14px;
+  border-radius: 8px;
+  background: var(--line);
+  overflow: hidden;
+}
+.incentive-track > span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  background: linear-gradient(90deg, #2563eb, #16a34a);
+  transition: width 0.3s ease;
+}
+.incentive-percent {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+}
+.incentive-ok {
+  margin-top: 10px;
+}
+.incentive-missing {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.incentive-missing strong {
+  color: var(--danger);
+}
+@media (max-width: 620px) {
+  .incentive-agent-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import {
   ADMIN_SESSION_COOKIE,
   updateAdminCredentials,
@@ -11,6 +12,10 @@ import {
   deleteSubadmin,
   upsertSubadmin,
 } from "@/lib/subadmin/store";
+import {
+  saveIncentivePlan,
+  type IncentivePlan,
+} from "@/lib/incentive";
 
 export type AdminCredState = {
   ok?: boolean;
@@ -129,3 +134,55 @@ export async function deleteSubadminAction(
   await deleteSubadmin(slot);
   return { success: true, slot };
 }
+
+export type IncentiveActionState = {
+  error?: string;
+  success?: boolean;
+};
+
+const MONTH_NAMES = [
+  "Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
+  "Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre",
+];
+
+/**
+ * Salva il PIANO INCENTIVANTE (solo amministratore principale).
+ * Campi: obiettivo imponibile (€), mese/anno, premio (€).
+ */
+export async function saveIncentivePlanAction(
+  _prev: IncentiveActionState,
+  formData: FormData
+): Promise<IncentiveActionState> {
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+
+  const target = Number(String(formData.get("target") ?? "").replace(",", "."));
+  const prize = Number(String(formData.get("prize") ?? "").replace(",", "."));
+  const monthNum = Number(formData.get("mese") ?? 0);
+  const year = Number(formData.get("anno") ?? 0);
+
+  if (!Number.isInteger(monthNum) || monthNum < 1 || monthNum > 12) {
+    return { error: "Seleziona un mese valido." };
+  }
+  if (!Number.isFinite(year) || year < 2020 || year > 2100) {
+    return { error: "Seleziona un anno valido." };
+  }
+
+  const plan: IncentivePlan = {
+    target,
+    month: `${year}-${String(monthNum).padStart(2, "0")}`,
+    prize,
+  };
+
+  const result = await saveIncentivePlan(plan);
+  if (!result.ok) return { error: result.error ?? "Errore durante il salvataggio." };
+
+  revalidatePath("/console");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export { MONTH_NAMES };
+

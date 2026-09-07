@@ -5,10 +5,12 @@ import { getAgentsCommissionData, getCommissionRates } from "@/lib/commissions";
 import { readCatalog } from "@/lib/catalog/template";
 import { countUnreadAdminOrders } from "@/lib/orders";
 import { formatEur } from "@/lib/format";
+import { getIncentivePlan, getTopAgentsIncentive } from "@/lib/incentive";
 import { NewOrderPopup } from "./new-order-popup";
 import { AdminSettingsModal } from "./admin-settings-modal";
 import { UsersModal } from "./users-modal";
 import { listSubadmins } from "@/lib/subadmin/store";
+import { IncentivePanel } from "./incentive-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -58,9 +60,12 @@ export default async function ConsolePage() {
   const totalOrders = agents.reduce((sum, a) => sum + a.orders.length, 0);
   const totalImponibile = agents.reduce((sum, a) => sum + a.totale, 0);
   const discounted = items.filter((i) => i.sconto > 0).length;
-  // I sub-amministratori sono in sola lettura: la gestione degli utenti
-  // (Sub-amministratori) e' riservata all'amministratore principale.
+  // Sub-amministratori in sola lettura.
   const subadmins = admin.subAdmin ? [] : await listSubadmins();
+
+  // Piano incentivante + top 3 agenti del mese del piano.
+  const plan = await getIncentivePlan();
+  const topIncentive = plan ? await getTopAgentsIncentive(plan) : [];
 
   return (
     <>
@@ -129,6 +134,12 @@ export default async function ConsolePage() {
           <Link href="/agenti">Agenti e provvigioni</Link>.
         </p>
       </section>
+
+      <IncentivePanel
+        plan={plan}
+        top={topIncentive}
+        canEdit={!admin.subAdmin}
+      />
     </>
   );
 }
