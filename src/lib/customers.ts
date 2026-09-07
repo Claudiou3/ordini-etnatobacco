@@ -71,48 +71,65 @@ async function searchSupabase(
     return error ? [] : (data ?? []);
   }
 
-  const { data, error } = await supabase
+  // Buffer più ampio del limite richiesto: servono candidati a sufficienza
+  // per la deduplica finale senza perdere risultati utili.
+  const buffer = Math.min(100, limit + 40);
+
+  // 1) PRIMA i clienti il cui NOME/P.IVA/CF contiene la parola cercata
+  //    (così "Messina" trova le aziende che hanno "Messina" nel nome).
+  const { data: names, error: namesError } = await supabase
     .from("customers")
     .select("*")
     .or(
-      `ragione_sociale.ilike.%${q}%,partita_iva.ilike.%${q}%,codice_fiscale.ilike.%${q}%,citta.ilike.%${q}%`
+      `ragione_sociale.ilike.%${q}%,partita_iva.ilike.%${q}%,codice_fiscale.ilike.%${q}%`
     )
     .order("ragione_sociale", { ascending: true })
-    .limit(limit);
+    .limit(buffer);
 
-  return error ? [] : (data ?? []);
+  const primary = namesError ? [] : (names ?? []);
+  const primaryCount = primary.length;
+
+  // 2) SOLO se servono ancora risultati, completa con i clienti la cui
+  //    CITTÀ contiene la parola (non devono "rubare" i posti ai nomi).
+  let cityFill: Customer[] = [];
+  if (primaryCount < limit) {
+    const { data: cities } = await supabase
+      .from("customers")
+      .select("*")
+      .ilike("citta", `%${q}%`)
+      .order("ragione_sociale", { ascending: true })
+      .limit(limit - primaryCount);
+    cityFill = cities ?? [];
+  }
+
+  return mergeByKey([...primary, ...cityFill]).slice(0, limit);
 }
 
 export async function listCustomers(limit = 50): Promise<Customer[]> {
-  const excel = (await listAnagraficaExcel(limit)).map(toCustomer);
-
-  let extra: Customer[] = [];
+  // In produzione (Supabase configurato) la fonte è il database: coerente e
+  // veloce. Il file Excel viene usato solo in assenza di Supabase (demo/LAN).
   if (await isSupabaseConfigured()) {
-    extra = await searchSupabase("", limit);
-  } else {
-    extra = demoSearchCustomers("", limit);
+    return searchSupabase("", limit);
   }
-
+  const excel = (await listAnagraficaExcel(limit)).map(toCustomer);
+  const extra = demoSearchCustomers("", limit);
   return mergeByKey([...excel, ...extra]).slice(0, limit);
 }
 
 /**
- * Ricerca condivisa per ragione sociale, P.IVA, codice fiscale o citta'.
- * Il cliente si puo' trovare anche digitando solo una parte di P.IVA/CF.
+ * Ricerca condivisa per ragione sociale, P.IVA, codice fiscale o città.
+ * Priorità: prima i risultati per nome/codici, poi a riempimento la città.
+ * Il cliente si può trovare anche digitando solo una parte di P.IVA/CF.
  */
 export async function searchCustomers(
   query: string,
   limit = 50
 ): Promise<Customer[]> {
-  const excel = (await searchAnagraficaExcel(query, limit)).map(toCustomer);
-
-  let extra: Customer[] = [];
   if (await isSupabaseConfigured()) {
-    extra = await searchSupabase(query, limit);
-  } else {
-    extra = demoSearchCustomers(query, limit);
+    return searchSupabase(query, limit);
   }
-
+  const excel = (await searchAnagraficaExcel(query, limit)).map(toCustomer);
+  const extra = demoSearchCustomers(query, limit);
   return mergeByKey([...excel, ...extra]).slice(0, limit);
 }
 
