@@ -9,12 +9,25 @@ import { formatEur, formatDate } from "@/lib/format";
 import { deleteOrderAction, cancelOrderAction, restoreOrderAction } from "./actions";
 import { ConfirmDialog } from "./confirm-dialog";
 
+const MONTH_NAMES = [
+  "Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
+  "Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre",
+];
+
+/** "2026-08" -> "Agosto 2026" */
+function monthLabel(month: string): string {
+  const [year, m] = month.split("-");
+  const name = MONTH_NAMES[Number(m) - 1] ?? m;
+  return `${name} ${year}`;
+}
+
 /**
- * Elenco ordini con filtri: ricerca libera (ragione sociale, P.IVA, CF),
- * intervallo di date e pulsante "Vedi tutti" per mostrare tutti gli ordini
- * in ORDINE DI ARRIVO (l'ultimo trasmesso e' il primo). Ogni riga apre il
- * dettaglio ordine. Gli ordini ANNULLATI dall'amministratore compaiono in
- * grigio scuro con la motivazione e non generano provvigioni.
+ * Elenco ordini con filtri: ricerca libera (ragione sociale, P.IVA, CF,
+ * numero ordine), mese, intervallo di date e pulsante "Vedi tutti" per
+ * mostrare tutti gli ordini in ORDINE DI ARRIVO (l'ultimo trasmesso e' il
+ * primo). Ogni riga apre il dettaglio ordine. Gli ordini ANNULLATI
+ * dall'amministratore compaiono in grigio scuro con la motivazione e non
+ * generano provvigioni.
  */
 export function OrdersFilter({
   orders,
@@ -27,6 +40,7 @@ export function OrdersFilter({
   canManage?: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [month, setMonth] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   // Lato amministratore: filtro Confermati / Non Confermati / Eliminati.
@@ -107,6 +121,8 @@ export function OrdersFilter({
           .toLowerCase();
         if (!haystack.includes(q)) return false;
       }
+      // Filtro "per mese" (YYYY-MM) sul campo data_ordine.
+      if (month && !String(o.data_ordine ?? "").startsWith(month)) return false;
       if (dateFrom && o.data_ordine < dateFrom) return false;
       if (dateTo && o.data_ordine > dateTo) return false;
       // Lato amministratore: stato Confermato / Non Confermato / Eliminato.
@@ -121,7 +137,17 @@ export function OrdersFilter({
     });
     // Ordine di ARRIVO: l'ultimo ordine trasmesso e' il primo della lista.
     return sortOrdersByArrival(filtered);
-  }, [orders, search, dateFrom, dateTo, isAdmin, statusFilter]);
+  }, [orders, search, month, dateFrom, dateTo, isAdmin, statusFilter]);
+
+  // Mesi/anni presenti negli ordini (per il menu "Mese"), dal più recente.
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of orders) {
+      const m = String(o.data_ordine ?? "").slice(0, 7);
+      if (m.length === 7) set.add(m);
+    }
+    return Array.from(set).sort().reverse();
+  }, [orders]);
 
   // Amministratore: la tendina decide cosa mostrare.
   // Agente: comportamento storico (recenti / Vedi tutti).
@@ -146,22 +172,39 @@ export function OrdersFilter({
             <p className="eyebrow">Filtri</p>
             <h2>Trova un ordine</h2>
             <p className="settings-help">
-              Cerca per ragione sociale, P.IVA, codice fiscale o numero ordine,
-              e filtra per intervallo di date.
+              Cerca per ragione sociale, P.IVA, codice fiscale o numero
+              ordine, e filtra per mese o intervallo di date.
             </p>
           </div>
         </div>
 
         <div className="orders-filters">
           <label className="form-field">
-            <span className="form-label">Cerca (ragione sociale, P.IVA, CF)</span>
+            <span className="form-label">
+              Cerca (ragione sociale, P.IVA, CF, n. ordine)
+            </span>
             <input
               className="form-input"
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Ragione sociale, P.IVA o codice fiscale…"
+              placeholder="Ragione sociale, P.IVA, CF o numero ordine…"
             />
+          </label>
+          <label className="form-field">
+            <span className="form-label">Mese</span>
+            <select
+              className="form-input"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+            >
+              <option value="">Tutti i mesi</option>
+              {availableMonths.map((m) => (
+                <option key={m} value={m}>
+                  {monthLabel(m)}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="form-field">
             <span className="form-label">Dal</span>
