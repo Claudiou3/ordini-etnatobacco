@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { saveCommissionRatesAction } from "./actions";
+import { DeleteAgentButton } from "./delete-agent-button";
 import {
   COMMISSION_GROUPS,
   type AgentCommissionData,
@@ -218,6 +219,15 @@ export function CommissionPanel({
                 </summary>
 
                 <div className="agent-folder-body">
+                  {canEdit && (
+                    <div className="agent-folder-actions">
+                      <DeleteAgentButton
+                        agentId={agent.id}
+                        nome={agent.nome}
+                        ordersCount={agent.orders.length}
+                      />
+                    </div>
+                  )}
                   {/* Riepilogo a colpo d'occhio */}
                   <div className="agent-folder-stats">
                     <span>
