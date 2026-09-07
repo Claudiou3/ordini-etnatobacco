@@ -22,8 +22,11 @@ function settingCacheKey(key: string): string {
   return `app-setting:${key}`;
 }
 
-export async function getAppSetting<T>(key: string): Promise<T | null> {
-  return memoized<T | null>(settingCacheKey(key), APP_SETTING_CACHE_TTL_MS, async () => {
+export async function getAppSetting<T>(
+  key: string,
+  opts?: { fresh?: boolean }
+): Promise<T | null> {
+  const load = async (): Promise<T | null> => {
     const supabase = await createAdminClient();
     if (!supabase) return null;
     const { data, error } = await supabase
@@ -33,7 +36,12 @@ export async function getAppSetting<T>(key: string): Promise<T | null> {
       .maybeSingle();
     if (error || !data) return null;
     return (data.value as T) ?? null;
-  });
+  };
+  // Con fresh:true si salta la cache (serve per dati scritti spesso, es. lo
+  // stato "confermato/non letto" degli ordini, per non rileggere valori
+  // vecchi su altre istanze Vercel).
+  if (opts?.fresh) return load();
+  return memoized<T | null>(settingCacheKey(key), APP_SETTING_CACHE_TTL_MS, load);
 }
 
 export async function setAppSetting<T>(

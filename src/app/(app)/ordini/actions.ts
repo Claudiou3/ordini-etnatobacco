@@ -164,10 +164,17 @@ export async function confirmOrderAction(
     return { error: "Operazione riservata all'amministratore." };
   }
 
-  await markOrderRead(orderId);
+  const saved = await markOrderRead(orderId);
+  if (!saved) {
+    return {
+      error:
+        "Conferma non salvata (Supabase non raggiungibile). Riprova tra qualche secondo.",
+    };
+  }
 
   revalidatePath("/ordini");
   revalidatePath("/console");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
