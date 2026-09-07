@@ -7,19 +7,10 @@ import {
   verifyAdmin,
 } from "@/lib/admin/store";
 import { getCurrentAdmin } from "@/lib/supabase/session";
-import { countUnreadAdminOrders } from "@/lib/orders";
 import {
   deleteSubadmin,
   upsertSubadmin,
 } from "@/lib/subadmin/store";
-
-/**
- * Numero di ordini non ancora letti dall'amministratore: usato dal pop-up
- * della Consolle per segnalare l'arrivo di un nuovo ordine.
- */
-export async function getUnreadOrdersCountAction(): Promise<{ count: number }> {
-  return { count: await countUnreadAdminOrders() };
-}
 
 export type AdminCredState = {
   ok?: boolean;

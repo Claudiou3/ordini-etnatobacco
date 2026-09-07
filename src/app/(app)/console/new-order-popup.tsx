@@ -1,43 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { getUnreadOrdersCountAction } from "./actions";
 
 /**
  * Pop-up "Nuovo ordine" nella Consolle di comando.
- * Controlla ogni 15 secondi il numero di ordini non letti: se arriva un nuovo
- * ordine (il conteggio aumenta) mostra il pop-up con la scritta "Nuovo ordine".
+ *
+ * NESSUN POLLING PERIODICO: qui non ci sono setInterval/ping verso il server.
+ * L'avviso compare SOLO se al caricamento della pagina risultano ordini non
+ * letti (conteggio calcolato lato server come per tutte le altre pagine).
+ * L'aggiornamento avviene a ogni normale caricamento/navigazione: è il
+ * comportamento serverless standard di Vercel e non consuma CPU.
  */
 export function NewOrderPopup({ initialUnread }: { initialUnread: number }) {
   const [open, setOpen] = useState(initialUnread > 0);
-  const [count, setCount] = useState(initialUnread);
-  const lastCountRef = useRef(initialUnread);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function poll() {
-      try {
-        const res = await getUnreadOrdersCountAction();
-        if (cancelled) return;
-        setCount(res.count);
-        // Nuovo ordine arrivato mentre la Consolle è aperta.
-        if (res.count > 0 && res.count > lastCountRef.current) {
-          setOpen(true);
-        }
-        lastCountRef.current = res.count;
-      } catch {
-        // rete momentaneamente non disponibile: si riprova al prossimo giro
-      }
-    }
-    const id = setInterval(poll, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, []);
-
-  if (!open) return null;
+  if (!open || initialUnread === 0) return null;
 
   return (
     <div className="new-order-popup" role="alert">
@@ -45,11 +23,11 @@ export function NewOrderPopup({ initialUnread }: { initialUnread: number }) {
         📬
       </span>
       <div>
-        <strong>Nuovo ordine{count > 1 ? ` (${count})` : ""}</strong>
+        <strong>Nuovo ordine{initialUnread > 1 ? ` (${initialUnread})` : ""}</strong>
         <span>
-          {count === 1
+          {initialUnread === 1
             ? "È stato ricevuto un nuovo ordine."
-            : `Sono stati ricevuti ${count} ordini non ancora letti.`}
+            : `Sono stati ricevuti ${initialUnread} ordini non ancora letti.`}
         </span>
       </div>
       <Link href="/ordini" className="primary-button">

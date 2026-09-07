@@ -4,26 +4,22 @@ import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 /**
- * Mantiene viva la sessione dell'agente (Supabase) mentre l'app è aperta.
+ * Mantiene valida la sessione dell'agente (Supabase) quando l'app è aperta,
+ * SENZA alcun ping/timer periodico verso Vercel.
  *
- * Perché: il token di accesso dura ~1 ora. Se l'app resta in background (o
- * viene riaperta da Home dopo ore, tipico di Android/iPhone) senza che una
- * pagina usi il client Supabase, il token scade e al prossimo giro il proxy
- * deve fare il refresh tutto in una volta, nel momento peggiore (rete lenta,
- * avvio da Home). Questo componente:
- * - attiva l'auto-refresh di supabase-js (rinnova poco prima della scadenza
- *   e riscrive i cookie, che hanno scadenza lunghissima);
- * - quando l'app torna visibile o la rete torna, controlla la sessione e, se
- *   il token è scaduto o in scadenza nei prossimi 10 minuti, lo rinnova
- *   subito: così al ritorno la sessione è già valida e non viene mai
- *   "buttata fuori".
+ * Il token di accesso dura ~1 ora. Questo componente:
+ * - attiva l'auto-refresh di supabase-js (la libreria rinnova il token poco
+ *   prima della scadenza, senza chiamate continue al nostro server);
+ * - quando l'app torna visibile (o la rete torna) controlla la sessione e,
+ *   se il token è scaduto o in scadenza nei prossimi 10 minuti, lo rinnova:
+ *   così riaprendo l'app dopo ore la sessione è ancora valida.
+ * Tutto avviene SOLO su eventi reali (apertura/ritorno in primo piano) o
+ * poco prima della scadenza del token: nessuna attività di "standby".
  */
 export function SessionKeepAlive() {
   useEffect(() => {
     const supabase = createClient();
     if (!supabase) return;
-
-    let timer: ReturnType<typeof setInterval> | null = null;
 
     const refreshIfNeeded = async () => {
       try {
@@ -38,17 +34,13 @@ export function SessionKeepAlive() {
           await supabase.auth.refreshSession();
         }
       } catch {
-        // Rete assente o errore temporaneo: si ritenta alla prossima occasione
-        // (visibilitychange, online, timer). Non serve mostrare errori.
+        // Rete assente o errore temporaneo: si ritenta al prossimo evento
+        // (visibilità, online) o al prossimo auto-refresh della libreria.
       }
     };
 
-    // Auto-refresh di supabase-js (rinnova poco prima della scadenza).
+    // Auto-refresh di supabase-js: rinnova ~1 minuto prima della scadenza.
     void supabase.auth.startAutoRefresh();
-
-    // Controllo preventivo periodico (copre anche eventuali auto-refresh
-    // sospesi dal browser quando l'app era in background).
-    timer = setInterval(() => void refreshIfNeeded(), 15 * 60 * 1000);
 
     const onVisible = () => {
       if (document.visibilityState === "visible") void refreshIfNeeded();
@@ -61,7 +53,6 @@ export function SessionKeepAlive() {
 
     return () => {
       void supabase.auth.stopAutoRefresh();
-      if (timer) clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
     };
