@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import type { CSSProperties } from "react";
 import { getCurrentAdmin, getCurrentAgent } from "@/lib/supabase/session";
 import { initials } from "@/lib/format";
@@ -57,6 +58,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span>{roleLabel}</span>
           </div>
         </div>
+        {!admin && (
+          <Link href="/nuovo-ordine" className="new-order-side-btn">
+            <span aria-hidden="true">＋</span> NUOVO ORDINE
+          </Link>
+        )}
         <AppNav isAdmin={Boolean(admin)} />
         {!admin && (
           <DownloadCatalogButton iconUrl={logos.logo3.src || undefined} />

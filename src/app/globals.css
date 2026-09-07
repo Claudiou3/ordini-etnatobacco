@@ -1216,4 +1216,35 @@ h2 { font-size: 21px; }
   max-width: 420px;
 }
 
+/* Pulsante "NUOVO ORDINE" nella colonna di sinistra (agenti) */
+.new-order-side-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 14px 0 4px;
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.35);
+  transition: filter 0.15s, transform 0.05s;
+}
+.new-order-side-btn:hover {
+  filter: brightness(1.08);
+}
+.new-order-side-btn:active {
+  transform: translateY(1px);
+}
+@media (max-width: 620px) {
+  .new-order-side-btn {
+    margin: 10px 0 6px;
+    font-size: 13px;
+    padding: 10px 12px;
+  }
+}
+
 
