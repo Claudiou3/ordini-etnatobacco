@@ -1,13 +1,18 @@
-import { getSessionUser } from "@/lib/supabase/session";
 import { CambiaPasswordForm } from "./cambia-form";
 
 export const metadata = {
   title: "Nuova password | Ordini",
 };
 
-export default async function CambiaPasswordPage() {
-  // Il link di recupero crea una sessione di recupero: se assente il link
-  // non è valido (o è scaduto).
-  const user = await getSessionUser();
-  return <CambiaPasswordForm valid={Boolean(user)} />;
+export default async function CambiaPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string; email?: string }>;
+}) {
+  const params = await searchParams;
+  // Il link ricevuto via email contiene token + email: senza entrambi la
+  // pagina mostra il messaggio "link non valido/scaduto".
+  return (
+    <CambiaPasswordForm token={params.token ?? ""} email={params.email ?? ""} />
+  );
 }

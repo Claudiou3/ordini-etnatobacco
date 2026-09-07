@@ -22,6 +22,10 @@ import {
   localSessionCookieOptions,
 } from "@/lib/supabase/session";
 import { sendOrderEmail } from "@/lib/email/send";
+import {
+  createAgentPasswordResetToken,
+  completeAgentPasswordReset,
+} from "@/lib/agent-reset";
 
 const DEMO_COOKIE = "ioi_demo_session";
 
@@ -399,37 +403,44 @@ function siteBaseUrl(): string {
 }
 
 /**
- * "Password dimenticata?" (AGENTI): invia il link di reset tramite Supabase
- * Auth alla casella indicata. Il link riporta al nostro sito dove l'agente
- * potrà impostare la nuova password. Nessun altro può cambiarla al suo posto.
+ * "Password dimenticata?" (AGENTI): genera un token monouso (30 min) e invia
+ * il link via email (canale SMTP dell'app). Solo chi possiede la casella può
+ * cambiare la password. Il messaggio è generico se l'email non esiste.
  */
 export async function requestAgentPasswordReset(
   _prev: ResetPasswordState,
   formData: FormData
 ): Promise<ResetPasswordState> {
-  const email = String(formData.get("email") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { error: "Inserisci un indirizzo email valido." };
   }
 
-  const supabase = await createClient();
-  if (!supabase) {
-    return {
-      error: "Recupero password non disponibile (Supabase non configurato).",
-    };
+  const created = await createAgentPasswordResetToken(email);
+
+  // Se l'email non è un agente registrato non inviamo nulla, ma il messaggio
+  // resta generico (non riveliamo quali email esistono).
+  if (created.ok && created.token) {
+    const resetUrl =
+      `${siteBaseUrl()}/cambia-password?token=${encodeURIComponent(
+        created.token
+      )}&email=${encodeURIComponent(email)}`;
+
+    const sent = await sendOrderEmail({
+      to: email,
+      subject: "Recupero password agente — Ordini",
+      text: `Hai richiesto di reimpostare la password del tuo account agente.\n\nApri questo link entro 30 minuti per scegliere la nuova password:\n${resetUrl}\n\nSe non hai richiesto tu il cambio, ignora questa email.\n\n— Ordini IOI`,
+    });
+
+    if (!sent.sent) {
+      return {
+        error:
+          "Link generato ma invio email non riuscito: " +
+          (sent.error ?? "canale email non configurato"),
+      };
+    }
   }
 
-  const redirectTo = `${siteBaseUrl()}/auth/callback?next=${encodeURIComponent(
-    "/cambia-password"
-  )}`;
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo,
-  });
-  if (error) {
-    return { error: "Impossibile inviare il link: " + error.message };
-  }
-
-  // Risposta generica: non riveliamo se l'email esiste o no.
   return {
     message:
       "Se l'email è registrata riceverai a breve un messaggio con il link per reimpostare la password.",
@@ -437,13 +448,15 @@ export async function requestAgentPasswordReset(
 }
 
 /**
- * Imposta la NUOVA password dell'agente dopo il reset via email.
- * La sessione di recupero è stata creata dal link ricevuto per email.
+ * Imposta la NUOVA password dell'agente usando il token ricevuto via email.
+ * Nessuna sessione necessaria: verifica il token monouso e aggiorna dal server.
  */
 export async function updateAgentPasswordAction(
   _prev: ResetPasswordState,
   formData: FormData
 ): Promise<ResetPasswordState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const token = String(formData.get("token") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
   if (password.length < 8) {
@@ -453,24 +466,10 @@ export async function updateAgentPasswordAction(
     return { error: "Le password non coincidono." };
   }
 
-  const supabase = await createClient();
-  if (!supabase) {
-    return { error: "Operazione non disponibile (Supabase non configurato)." };
+  const result = await completeAgentPasswordReset(email, token, password);
+  if (!result.ok) {
+    return { error: result.error ?? "Reset non riuscito." };
   }
-
-  const { error } = await supabase.auth.updateUser({ password });
-  if (error) {
-    if (error.message.toLowerCase().includes("no user")) {
-      return {
-        error:
-          "Sessione di recupero non valida o scaduta: apri di nuovo il link ricevuto via email.",
-      };
-    }
-    return { error: "Impossibile aggiornare la password: " + error.message };
-  }
-
-  // La password è cambiata: chiudi la sessione e fai accedere con la nuova.
-  await supabase.auth.signOut().catch(() => null);
   return {
     message:
       "Password aggiornata con successo. Ora puoi accedere con la nuova password.",

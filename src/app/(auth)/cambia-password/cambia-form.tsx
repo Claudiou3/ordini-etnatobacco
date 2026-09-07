@@ -5,19 +5,25 @@ import Link from "next/link";
 import { updateAgentPasswordAction, type ResetPasswordState } from "../actions";
 import { PasswordField } from "@/components/password-field";
 
-export function CambiaPasswordForm({ valid }: { valid: boolean }) {
-  const [state, formAction, pending] = useActionState<ResetPasswordState, FormData>(
-    updateAgentPasswordAction,
-    {}
-  );
+export function CambiaPasswordForm({
+  token,
+  email,
+}: {
+  token: string;
+  email: string;
+}) {
+  const [state, formAction, pending] = useActionState<
+    ResetPasswordState,
+    FormData
+  >(updateAgentPasswordAction, {});
 
-  if (!valid) {
+  if (!token || !email) {
     return (
       <div className="auth-card">
         <h1>Link non valido o scaduto</h1>
         <p className="auth-subtitle">
-          Il link di recupero non è più valido. Richiedine uno nuovo dalla
-          pagina di accesso.
+          Il link di recupero non è più valido (o è arrivato da un&apos;email
+          vecchia). Richiedine uno nuovo dalla pagina di accesso.
         </p>
         <p className="auth-switch">
           <Link href="/recupero-password">Richiedi un nuovo link</Link>
@@ -34,6 +40,8 @@ export function CambiaPasswordForm({ valid }: { valid: boolean }) {
       </p>
 
       <form action={formAction} className="auth-form">
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="email" value={email} />
         <PasswordField
           name="password"
           label="Nuova password"
