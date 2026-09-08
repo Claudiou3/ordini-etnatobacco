@@ -2,7 +2,11 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { appDataDir } from "@/lib/data-dir";
-import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
+import {
+  getAppSetting,
+  setAppSetting,
+  deleteAppSetting,
+} from "@/lib/supabase/app-settings";
 import { getSetting } from "@/lib/settings/runtime";
 import { getEncryptionKey } from "@/lib/crypto";
 // Ri-esportato dal modulo condiviso (usato anche dal Proxy/Middleware Edge).
@@ -231,9 +235,11 @@ async function writeResetEntry(entry: AdminResetEntry): Promise<boolean> {
 }
 
 async function clearResetEntry(): Promise<void> {
-  // Invalidazione su Supabase + tentativo di rimozione del file locale.
+  // Elimina la riga su Supabase (se configurato) e rimuove il file locale.
+  // Non usare setAppSetting(key, null): value è jsonb NOT NULL → l'upsert
+  // fallirebbe in silenzio e il token resterebbe valido sul remoto.
   try {
-    await setAppSetting(ADMIN_RESET_SETTING_KEY, null);
+    await deleteAppSetting(ADMIN_RESET_SETTING_KEY);
   } catch {
     // ignore
   }

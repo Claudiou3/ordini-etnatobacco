@@ -60,3 +60,22 @@ export async function setAppSetting<T>(
   );
   return !error;
 }
+
+/**
+ * Elimina una chiave da app_settings (invalida anche la cache di lettura).
+ *
+ * NOTA: la colonna `value` è `jsonb NOT NULL`, quindi per cancellare un valore
+ * NON si può fare upsert con null: va eliminata la riga.
+ *
+ * Ritorna:
+ *  - true  → riga rimossa (o assente) su Supabase;
+ *  - false → Supabase configurato ma la cancellazione è fallita;
+ *  - null  → Supabase non configurato (il chiamante può usare i file locali).
+ */
+export async function deleteAppSetting(key: string): Promise<boolean | null> {
+  invalidateMemo(settingCacheKey(key));
+  const supabase = await createAdminClient();
+  if (!supabase) return null;
+  const { error } = await supabase.from("app_settings").delete().eq("key", key);
+  return !error;
+}

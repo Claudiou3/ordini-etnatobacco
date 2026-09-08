@@ -2,7 +2,11 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { appDataDir } from "@/lib/data-dir";
-import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
+import {
+  getAppSetting,
+  setAppSetting,
+  deleteAppSetting,
+} from "@/lib/supabase/app-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -50,8 +54,11 @@ async function writeResetEntry(entry: AgentResetEntry): Promise<boolean> {
 }
 
 async function clearResetEntry(): Promise<void> {
+  // Elimina la riga su Supabase (se configurato) e rimuove il file locale.
+  // Non usare setAppSetting(key, null): value è jsonb NOT NULL → l'upsert
+  // fallirebbe in silenzio e il token resterebbe valido sul remoto.
   try {
-    await setAppSetting(RESET_SETTING_KEY, null);
+    await deleteAppSetting(RESET_SETTING_KEY);
   } catch {
     // ignore
   }

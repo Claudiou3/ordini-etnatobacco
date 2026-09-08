@@ -1,7 +1,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { appDataPath } from "@/lib/data-dir";
-import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
+import {
+  getAppSetting,
+  setAppSetting,
+  deleteAppSetting,
+} from "@/lib/supabase/app-settings";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { memoized, invalidateMemo } from "@/lib/server-cache";
@@ -132,17 +136,24 @@ async function imponibileMonth(
 /** Elimina il piano incentivante corrente (Supabase o file locale). */
 export async function deleteIncentivePlan(): Promise<boolean> {
   invalidateMemo(CACHE_KEY);
-  try {
-    await setAppSetting(SETTINGS_KEY, null);
-  } catch {
-    // si prosegue con la rimozione del file locale
-  }
-  try {
-    await fs.rm(SETTINGS_FILE, { force: true });
-    return true;
-  } catch {
+
+  // Cancella la riga su Supabase (se configurato). NON si può usare
+  // setAppSetting(key, null): la colonna value è jsonb NOT NULL, quindi
+  // quell'upsert fallisce in silenzio e il piano rimarrebbe in linea.
+  const remote = await deleteAppSetting(SETTINGS_KEY);
+  if (remote === false) {
+    // Supabase configurato ma cancellazione fallita: non rimuovere il file
+    // locale, altrimenti al prossimo giro il piano "tornerebbe" dal remoto.
     return false;
   }
+
+  // Rimuove anche l'eventuale file locale (modalità desktop / senza Supabase).
+  try {
+    await fs.rm(SETTINGS_FILE, { force: true });
+  } catch {
+    // file locale assente o non rimovibile: la cancellazione è già riuscita
+  }
+  return true;
 }
 
 export type IncentiveAgentView = {

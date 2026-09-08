@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useActionState } from "react";
+import { useEffect, useRef, useState, useActionState } from "react";
 import {
   saveIncentivePlanAction,
   clearIncentivePlanAction,
@@ -58,6 +58,15 @@ export function IncentivePanel({
     IncentiveActionState,
     FormData
   >(clearIncentivePlanAction, {});
+  const deleteFormRef = useRef<HTMLFormElement>(null);
+
+  // I selettori Mese/Anno sono inizializzati solo al mount: se il piano attivo
+  // cambia (salvataggio/eliminazione) i valori vanno riallineati alla prop.
+  useEffect(() => {
+    const next = planMonthParts(plan?.month);
+    setMese(next.mese);
+    setAnno(next.anno);
+  }, [plan?.month]);
 
   return (
     <section className="content-panel">
@@ -85,7 +94,12 @@ export function IncentivePanel({
       )}
 
       {canEdit && (
-        <form action={formAction} className="incentive-form">
+        <>
+          <form
+            id="incentive-save-form"
+            action={formAction}
+            className="incentive-form"
+          >
           <div className="form-grid incentive-grid">
             <label className="form-field">
               <span className="form-label">Obiettivo imponibile (€)</span>
@@ -165,26 +179,22 @@ export function IncentivePanel({
               {pending ? "Salvataggio…" : plan ? "Aggiorna piano" : "Crea piano"}
             </button>
             {plan && (
-              <form
-                action={delFormAction}
-                onSubmit={(event) => {
+              <button
+                className="danger-button"
+                type="button"
+                onClick={() => {
                   if (
-                    !window.confirm(
+                    window.confirm(
                       "Eliminare il piano incentivante? Gli agenti non vedranno più obiettivo e premio."
                     )
                   ) {
-                    event.preventDefault();
+                    deleteFormRef.current?.requestSubmit();
                   }
                 }}
+                disabled={delPending}
               >
-                <button
-                  className="danger-button"
-                  type="submit"
-                  disabled={delPending}
-                >
-                  {delPending ? "Eliminazione…" : "Elimina piano"}
-                </button>
-              </form>
+                {delPending ? "Eliminazione…" : "Elimina piano"}
+              </button>
             )}
           </div>
           {delState?.error && (
@@ -197,7 +207,19 @@ export function IncentivePanel({
               Piano incentivante eliminato.
             </p>
           )}
-        </form>
+          </form>
+
+          {/* HTML non consente <form> annidati, quindi il modulo di eliminazione
+              vive qui fuori: il bottone "Elimina piano" lo invia esplicitamente
+              con requestSubmit() dopo la conferma. Nessun input visibile. */}
+          {plan && (
+            <form
+              id="incentive-delete-form"
+              ref={deleteFormRef}
+              action={delFormAction}
+            />
+          )}
+        </>
       )}
 
       {top.length > 0 && (
