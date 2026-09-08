@@ -244,6 +244,19 @@ export function ObiettiviPanel({
             >
               Mese corrente
             </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => {
+                const f = nFrom || "";
+                const t = nTo || "";
+                if (!f || !t) return;
+                const [a, b] = f <= t ? [f, t] : [t, f];
+                router.replace(`/obiettivi?da=${a}&a=${b}`);
+              }}
+            >
+              Aggiorna
+            </button>
           </div>
 
           <div className="gare-new-grid">

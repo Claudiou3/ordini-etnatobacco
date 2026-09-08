@@ -61,6 +61,7 @@ export async function addGaraAction(
   }
 
   revalidatePath("/obiettivi");
+  revalidatePath("/obiettivi-agente");
   revalidatePath("/dashboard");
   return { success: true };
 }
@@ -82,6 +83,7 @@ export async function deleteGaraAction(
     return { error: "Impossibile eliminare la gara (riprova)." };
   }
   revalidatePath("/obiettivi");
+  revalidatePath("/obiettivi-agente");
   revalidatePath("/dashboard");
   return { success: true };
 }

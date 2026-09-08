@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentAgent, getCurrentAdmin } from "@/lib/supabase/session";
-import { getGareAgente } from "@/lib/incentives";
+import { getGareAgente, getClassificaRange } from "@/lib/incentives";
 import { LogoutButton } from "../logout-button";
 import { ObiettiviContent } from "./obiettivi-content";
 
@@ -16,6 +16,11 @@ export default async function ObiettiviAgentePage() {
   if (admin) redirect("/obiettivi");
 
   const gareView = await getGareAgente(agent.id);
+  // Classifica del periodo attivo: serve all'agente per vedere subito chi ha
+  // vinto (top 3 Oro/Argento/Bronzo della gara miglior venditore).
+  const ranking = gareView
+    ? await getClassificaRange(gareView.from, gareView.to)
+    : [];
 
   return (
     <>
@@ -30,7 +35,11 @@ export default async function ObiettiviAgentePage() {
         </div>
         <LogoutButton />
       </header>
-      <ObiettiviContent gareView={gareView} />
+      <ObiettiviContent
+        gareView={gareView}
+        ranking={ranking}
+        agentId={agent.id}
+      />
     </>
   );
 }
