@@ -466,10 +466,8 @@ export function ObiettiviPanel({
                     const rowCls = [
                       "incentive-top-row",
                       "classifica-row",
-                      vincitoreValido ? "classifica-ok" : "",
-                      !vincitoreValido && ePrimo ? "classifica-top3" : "",
-                      !vincitoreValido && i === 1 ? medal.cls : "",
-                      !vincitoreValido && i === 2 ? medal.cls : "",
+                      medal.cls,
+                      vincitoreValido ? "classifica-ok-accent" : "",
                     ]
                       .filter(Boolean)
                       .join(" ");
@@ -487,7 +485,7 @@ export function ObiettiviPanel({
                                 ? "Primo in classifica — obiettivo non raggiunto"
                                 : medal.val > 0
                                   ? `Premio ${medal.cat}: ${formatEur(medal.val)}`
-                                  : r.email}
+                                  : `Premio ${medal.cat}: non assegnato`}
                           </small>
                         </span>
                         <strong className="incentive-amount">
@@ -552,10 +550,12 @@ export function ObiettiviPanel({
           </>
         )}
         <p className="settings-help">
-          Riga verde: obiettivo raggiunto nel periodo. Per la gara miglior
-          venditore il verde (vincitore) spetta al 1° solo se ha superato anche
-          l&apos;obiettivo accoppiato dello stesso periodo; se la gara è
-          individuale, vince il primo in classifica.
+          Gara miglior venditore: <strong>Oro (giallo)</strong> = 1°,
+          <strong> Argento (grigio)</strong> = 2°,{" "}
+          <strong>Bronzo (arancio)</strong> = 3°. Il bordo verde sull&apos;Oro
+          indica vincitore valido (ha superato anche l&apos;obiettivo se
+          accoppiato). Nell&apos;elenco sotto, riga verde = obiettivo raggiunto
+          nel periodo.
         </p>
       </section>
     </>

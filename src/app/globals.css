@@ -1469,17 +1469,33 @@ h2 { font-size: 21px; }
   font-weight: 600;
 }
 .incentive-top-row.classifica-p-oro {
-  background: #fff7e6;
-  border-color: #fcd34d;
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+.incentive-top-row.classifica-p-oro .incentive-rank,
+.incentive-top-row.classifica-p-oro .incentive-amount {
+  color: #b45309;
 }
 .incentive-top-row.classifica-p-argento {
-  background: #eef2f7;
-  border-color: #cbd5e1;
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+.incentive-top-row.classifica-p-argento .incentive-rank,
+.incentive-top-row.classifica-p-argento .incentive-amount {
+  color: #475569;
 }
 .incentive-top-row.classifica-p-bronzo {
-  background: #fdf2e9;
-  border-color: #fdba74;
+  background: #ffedd5;
+  border-color: #ea580c;
 }
+.incentive-top-row.classifica-p-bronzo .incentive-rank,
+.incentive-top-row.classifica-p-bronzo .incentive-amount {
+  color: #9a3412;
+}
+.incentive-top-row.classifica-ok-accent {
+  box-shadow: inset 4px 0 0 #16a34a;
+}
+
 
 
 
