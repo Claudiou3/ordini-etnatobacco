@@ -1367,5 +1367,56 @@ h2 { font-size: 21px; }
   }
 }
 
+/* ============ OBIETTIVI AGENTI (pagina gare / pannello admin) ============ */
+.incentive-agent-stack {
+  display: grid;
+  gap: 18px;
+}
+.month-switch {
+  flex: none;
+}
+.month-switch .form-input {
+  width: auto;
+  min-width: 130px;
+}
+.gare-new-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+.gara-new-block {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: #f8fafc;
+}
+.gara-new-block h3 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+.gara-form {
+  margin-top: 10px;
+}
+.gara-form .form-actions {
+  flex-wrap: wrap;
+}
+.gara-form .form-actions .form-note {
+  margin: 0;
+}
+.gara-kind {
+  font-size: 20px;
+  flex: none;
+  line-height: 1;
+}
+.gara-row .incentive-name {
+  flex: 1;
+}
+@media (max-width: 720px) {
+  .gare-new-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 
