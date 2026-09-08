@@ -134,7 +134,7 @@ export function ObiettiviPanel({
                   <strong>
                     {g.kind === "obiettivo"
                       ? `Obiettivo ${formatEur(g.target ?? 0)}`
-                      : `1° classificato${g.note ? ` — ${g.note}` : ""}`}
+                      : `Gara miglior venditore${g.note ? ` — ${g.note}` : ""}`}
                     <small className="gara-period">
                       {" "}
                       · {periodLabel(g.from, g.to)}
@@ -142,8 +142,18 @@ export function ObiettiviPanel({
                   </strong>
                   <small>
                     {g.kind === "obiettivo"
-                      ? "Premio a ogni agente che raggiunge l'obiettivo nel periodo"
-                      : "Premio all'agente con il maggior imponibile del periodo"}
+                      ? `Premio ${formatEur(g.prize)} a ogni agente che raggiunge l'obiettivo nel periodo`
+                      : [
+                          `Oro ${formatEur(g.prize)}`,
+                          g.prizeArgento
+                            ? `Argento ${formatEur(g.prizeArgento)}`
+                            : null,
+                          g.prizeBronzo
+                            ? `Bronzo ${formatEur(g.prizeBronzo)}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                   </small>
                 </span>
                 <strong className="incentive-amount">
@@ -296,24 +306,48 @@ export function ObiettiviPanel({
             <div className="gara-new-block">
               <h3>Gara miglior venditore</h3>
               <p className="settings-help">
-                Premio <strong>unico</strong> all&apos;agente con il maggior
-                imponibile del periodo. Se per lo stesso periodo esiste una gara
-                obiettivo, il vincitore deve averla raggiunta.
+                Tre premi di categoria per i primi 3 del periodo:{" "}
+                <strong>Oro</strong> (1°), <strong>Argento</strong> (2°) e{" "}
+                <strong>Bronzo</strong> (3°). Se per lo stesso periodo esiste una
+                gara obiettivo, il 1° vince l&apos;Oro solo se l&apos;ha
+                raggiunta.
               </p>
               <form action={venAction} className="incentive-form gara-form">
                 <input type="hidden" name="kind" value="vendite" />
                 <input type="hidden" name="from" value={nFrom} />
                 <input type="hidden" name="to" value={nTo} />
                 <label className="form-field">
-                  <span className="form-label">Premio 1° classificato (€)</span>
+                  <span className="form-label">Premio ORO — 1° (€)</span>
                   <input
                     className="form-input"
                     type="number"
                     name="prize"
                     min="0.01"
                     step="0.01"
-                    placeholder="es. 100"
+                    placeholder="es. 150"
                     required
+                  />
+                </label>
+                <label className="form-field">
+                  <span className="form-label">Premio ARGENTO — 2° (€)</span>
+                  <input
+                    className="form-input"
+                    type="number"
+                    name="prizeArgento"
+                    min="0"
+                    step="0.01"
+                    placeholder="es. 80"
+                  />
+                </label>
+                <label className="form-field">
+                  <span className="form-label">Premio BRONZO — 3° (€)</span>
+                  <input
+                    className="form-input"
+                    type="number"
+                    name="prizeBronzo"
+                    min="0"
+                    step="0.01"
+                    placeholder="es. 40"
                   />
                 </label>
                 <label className="form-field">
@@ -394,33 +428,66 @@ export function ObiettiviPanel({
             {venditeInRange.length > 0 && (
               <div className="classifica-block">
                 <h3>
-                  Gara miglior venditore — primi 3 (premio{" "}
-                  {formatEur(venditeInRange[0].prize)})
+                  Gara miglior venditore — premi di categoria: Oro{" "}
+                  {formatEur(venditeInRange[0].prize)}
+                  {venditeInRange[0].prizeArgento
+                    ? ` · Argento ${formatEur(venditeInRange[0].prizeArgento)}`
+                    : ""}
+                  {venditeInRange[0].prizeBronzo
+                    ? ` · Bronzo ${formatEur(venditeInRange[0].prizeBronzo)}`
+                    : ""}
                 </h3>
                 <div className="agent-list">
                   {ranking.slice(0, 3).map((r, i) => {
+                    const medals = [
+                      {
+                        cat: "Oro",
+                        val: venditeInRange[0].prize,
+                        cls: "classifica-p-oro",
+                      },
+                      {
+                        cat: "Argento",
+                        val: venditeInRange[0].prizeArgento ?? 0,
+                        cls: "classifica-p-argento",
+                      },
+                      {
+                        cat: "Bronzo",
+                        val: venditeInRange[0].prizeBronzo ?? 0,
+                        cls: "classifica-p-bronzo",
+                      },
+                    ];
+                    const medal = medals[i];
                     const ePrimo = i === 0;
                     const vincitoreValido =
                       ePrimo &&
                       (obiettivoInRange
                         ? r.imponibile >= targetObiettivo
                         : true);
+                    const rowCls = [
+                      "incentive-top-row",
+                      "classifica-row",
+                      vincitoreValido ? "classifica-ok" : "",
+                      !vincitoreValido && ePrimo ? "classifica-top3" : "",
+                      !vincitoreValido && i === 1 ? medal.cls : "",
+                      !vincitoreValido && i === 2 ? medal.cls : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ");
                     return (
-                      <div
-                        key={r.id}
-                        className={`incentive-top-row classifica-row${
-                          vincitoreValido ? " classifica-ok" : ""
-                        }${!vincitoreValido ? " classifica-top3" : ""}`}
-                      >
+                      <div key={r.id} className={rowCls}>
                         <span className="incentive-rank">{i + 1}º</span>
                         <span className="incentive-name">
                           <strong>{r.nome}</strong>
                           <small>
                             {ePrimo && vincitoreValido
-                              ? "Vincitore della gara del periodo"
+                              ? `Vincitore — Premio ${medal.cat}: ${formatEur(
+                                  medal.val
+                                )}`
                               : ePrimo && obiettivoInRange
-                                ? "Primo in classifica — obiettivo non ancora raggiunto"
-                                : r.email}
+                                ? "Primo in classifica — obiettivo non raggiunto"
+                                : medal.val > 0
+                                  ? `Premio ${medal.cat}: ${formatEur(medal.val)}`
+                                  : r.email}
                           </small>
                         </span>
                         <strong className="incentive-amount">
@@ -433,9 +500,10 @@ export function ObiettiviPanel({
                 {ranking[0] && obiettivoInRange &&
                   ranking[0].imponibile < targetObiettivo && (
                     <p className="form-error">
-                      Nessun vincitore per la gara miglior venditore: il 1° in
-                      classifica non ha raggiunto l&apos;obiettivo di{" "}
-                      {formatEur(targetObiettivo)} del periodo.
+                      Nessun vincitore dell&apos;Oro per la gara miglior
+                      venditore: il 1° in classifica non ha raggiunto
+                      l&apos;obiettivo di {formatEur(targetObiettivo)} del
+                      periodo.
                     </p>
                   )}
               </div>

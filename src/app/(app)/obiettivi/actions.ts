@@ -37,8 +37,25 @@ export async function addGaraAction(
     kind === "vendite"
       ? String(formData.get("note") ?? "").trim() || undefined
       : undefined;
+  const numOrUndef = (name: string): number | undefined => {
+    const raw = String(formData.get(name) ?? "").replace(",", ".").trim();
+    if (raw === "") return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const prizeArgento = kind === "vendite" ? numOrUndef("prizeArgento") : undefined;
+  const prizeBronzo = kind === "vendite" ? numOrUndef("prizeBronzo") : undefined;
 
-  const result = await saveIncentiveGara({ kind, from, to, prize, target, note });
+  const result = await saveIncentiveGara({
+    kind,
+    from,
+    to,
+    prize,
+    prizeArgento,
+    prizeBronzo,
+    target,
+    note,
+  });
   if (!result.ok) {
     return { error: result.error ?? "Errore durante il salvataggio." };
   }

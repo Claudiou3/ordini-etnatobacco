@@ -47,6 +47,10 @@ export type IncentiveGara = {
   target?: number;
   /** Premio in euro. */
   prize: number;
+  /** Premio argento — 2° classificato (solo gara "vendite"). */
+  prizeArgento?: number;
+  /** Premio bronzo — 3° classificato (solo gara "vendite"). */
+  prizeBronzo?: number;
   /** Etichetta facoltativa. */
   note?: string;
   createdAt: number;
@@ -61,6 +65,8 @@ type StoredGara = {
   to?: string;
   target?: number;
   prize: number;
+  prizeArgento?: number;
+  prizeBronzo?: number;
   note?: string;
   createdAt: number;
 };
@@ -127,6 +133,14 @@ function normalizeGara(s: StoredGara): IncentiveGara {
         ? Math.round(s.target * 100) / 100
         : undefined,
     prize: Math.round((Number(s.prize) || 0) * 100) / 100,
+    prizeArgento:
+      typeof s.prizeArgento === "number" && Number.isFinite(s.prizeArgento)
+        ? Math.round(s.prizeArgento * 100) / 100
+        : undefined,
+    prizeBronzo:
+      typeof s.prizeBronzo === "number" && Number.isFinite(s.prizeBronzo)
+        ? Math.round(s.prizeBronzo * 100) / 100
+        : undefined,
     note: s.note || undefined,
     createdAt: s.createdAt ?? 0,
   };
@@ -292,6 +306,8 @@ export async function saveIncentiveGara(input: {
   to: string;
   target?: number;
   prize: number;
+  prizeArgento?: number;
+  prizeBronzo?: number;
   note?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const kind: IncentiveKind =
@@ -307,6 +323,12 @@ export async function saveIncentiveGara(input: {
     return { ok: false, error: "Inserisci un premio (€) valido." };
   }
   const note = input.note?.trim().slice(0, 120) || undefined;
+  const aux = (v: number | undefined): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0
+      ? Math.round(v * 100) / 100
+      : undefined;
+  const prizeArgento = aux(input.prizeArgento);
+  const prizeBronzo = aux(input.prizeBronzo);
 
   if (kind === "obiettivo") {
     const target = Math.round((Number(input.target) || 0) * 100) / 100;
@@ -346,6 +368,8 @@ export async function saveIncentiveGara(input: {
     from: input.from,
     to: input.to,
     prize,
+    prizeArgento,
+    prizeBronzo,
     note,
     createdAt: Date.now(),
   });
@@ -437,6 +461,8 @@ export type GaraAgenteView = {
   to: string;
   target?: number;
   prize: number;
+  prizeArgento?: number;
+  prizeBronzo?: number;
   note?: string;
   /** Obiettivo imponibile della gara obiettivo con lo STESSO periodo (se c'è). */
   requisito?: number;
@@ -493,6 +519,8 @@ export async function getGareAgente(
           to: g.to,
           target: g.kind === "obiettivo" ? target : undefined,
           prize: g.prize,
+          prizeArgento: g.prizeArgento,
+          prizeBronzo: g.prizeBronzo,
           note: g.note,
           requisito:
             requisito !== undefined && Number.isFinite(Number(requisito))

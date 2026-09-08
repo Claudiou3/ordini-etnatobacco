@@ -1468,6 +1468,18 @@ h2 { font-size: 21px; }
   color: var(--muted);
   font-weight: 600;
 }
+.incentive-top-row.classifica-p-oro {
+  background: #fff7e6;
+  border-color: #fcd34d;
+}
+.incentive-top-row.classifica-p-argento {
+  background: #eef2f7;
+  border-color: #cbd5e1;
+}
+.incentive-top-row.classifica-p-bronzo {
+  background: #fdf2e9;
+  border-color: #fdba74;
+}
 
 
 

@@ -146,27 +146,30 @@ export default async function DashboardPage() {
 
                 <div className="incentive-agent-grid">
                   <div>
-                    <span className="stat-label">Premio 1° classificato</span>
+                    <span className="stat-label">Premio Oro — 1°</span>
                     <strong className="incentive-prize">
                       {formatEur(g.prize)}
                     </strong>
                   </div>
                   <div>
-                    <span className="stat-label">Il tuo imponibile</span>
-                    <strong>{formatEur(g.current)}</strong>
+                    <span className="stat-label">Premio Argento — 2°</span>
+                    <strong className="incentive-prize">
+                      {g.prizeArgento ? formatEur(g.prizeArgento) : "—"}
+                    </strong>
                   </div>
                   <div>
-                    <span className="stat-label">In gara</span>
-                    <strong className="incentive-target">
-                      {g.note ? g.note : "Miglior venditore del mese"}
+                    <span className="stat-label">Premio Bronzo — 3°</span>
+                    <strong className="incentive-prize">
+                      {g.prizeBronzo ? formatEur(g.prizeBronzo) : "—"}
                     </strong>
                   </div>
                 </div>
 
                 <p className="incentive-missing">
-                  Il premio va all&apos;agente con il maggior imponibile del
-                  periodo (ordini non annullati): ogni ordine conta per scalare
-                  la classifica!
+                  Il tuo imponibile nel periodo:{" "}
+                  <strong>{formatEur(g.current)}</strong>. I premi Oro,
+                  Argento e Bronzo vanno ai primi 3 agenti per imponibile del
+                  periodo (ordini non annullati).
                 </p>
                 {g.requisito ? (
                   <p className="form-note incentive-ok" role="status">
