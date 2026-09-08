@@ -129,8 +129,7 @@ export default async function DashboardPage() {
             <p className="incentive-missing">
               Ti mancano{" "}
               <strong>{formatEur(incentiveView.missing)}</strong> di imponibile
-              per raggiungere l&apos;obiettivo del mese. (Solo merce: gli
-              ordini annullati non contano.)
+              per raggiungere l&apos;obiettivo del mese.
             </p>
           )}
         </section>
