@@ -38,6 +38,24 @@ export function ObiettiviContent({
   const venditeGara = gareView.gare.find((g) => g.kind === "vendite");
   const obiettivoGara = gareView.gare.find((g) => g.kind === "obiettivo");
   const targetObiettivo = obiettivoGara?.target ?? 0;
+  // La classifica serve SOLO a trovare la posizione personale dell'agente:
+  // gli altri agenti/vincitori restano visibili unicamente all'amministratore.
+  const myIndex = venditeGara
+    ? ranking.findIndex((r) => r.id === agentId)
+    : -1;
+  const medals = [
+    { cat: "Oro", val: venditeGara?.prize ?? 0, cls: "classifica-p-oro" },
+    {
+      cat: "Argento",
+      val: venditeGara?.prizeArgento ?? 0,
+      cls: "classifica-p-argento",
+    },
+    {
+      cat: "Bronzo",
+      val: venditeGara?.prizeBronzo ?? 0,
+      cls: "classifica-p-bronzo",
+    },
+  ];
 
   return (
     <div className="incentive-agent-stack">
@@ -155,86 +173,67 @@ export function ObiettiviContent({
         );
       })}
 
-      {venditeGara && ranking.length > 0 && (
-        <section className="content-panel incentive-agent">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Gara miglior venditore — vincitori</p>
-              <h2>{periodoLabel(gareView)}</h2>
-            </div>
-          </div>
-          <div className="agent-list">
-            {ranking.slice(0, 3).map((r, i) => {
-              const medals = [
-                { cat: "Oro", val: venditeGara.prize, cls: "classifica-p-oro" },
-                {
-                  cat: "Argento",
-                  val: venditeGara.prizeArgento ?? 0,
-                  cls: "classifica-p-argento",
-                },
-                {
-                  cat: "Bronzo",
-                  val: venditeGara.prizeBronzo ?? 0,
-                  cls: "classifica-p-bronzo",
-                },
-              ];
-              const medal = medals[i];
-              const primo = i === 0;
-              const vincitoreValido =
-                primo &&
-                (obiettivoGara
-                  ? r.imponibile >= targetObiettivo
-                  : true);
-              const seiTu = r.id === agentId;
-              const rowCls = [
-                "incentive-top-row",
-                "classifica-row",
-                medal.cls,
-                vincitoreValido ? "classifica-ok-accent" : "",
-              ]
-                .filter(Boolean)
-                .join(" ");
-              const labelVal =
-                medal.val > 0 ? formatEur(medal.val) : "non assegnato";
-              return (
-                <div key={r.id} className={rowCls}>
-                  <span className="incentive-rank">{i + 1}º</span>
+      {myIndex >= 0 &&
+        myIndex < 3 &&
+        (() => {
+          const medal = medals[myIndex];
+          const me = ranking[myIndex];
+          const primo = myIndex === 0;
+          const oroValido =
+            primo &&
+            (obiettivoGara
+              ? (me?.imponibile ?? 0) >= targetObiettivo
+              : true);
+          const caption = primo
+            ? oroValido
+              ? `Hai vinto il Premio ${medal.cat}: ${formatEur(medal.val)}`
+              : `Sei 1° ma non hai raggiunto l'obiettivo di ${formatEur(
+                  targetObiettivo
+                )}: il Premio Oro non è assegnato`
+            : medal.val > 0
+              ? `Hai vinto il Premio ${medal.cat}: ${formatEur(medal.val)}`
+              : `Premio ${medal.cat} non previsto per questo periodo`;
+          const rowCls = [
+            "incentive-top-row",
+            "classifica-row",
+            medal.cls,
+            oroValido ? "classifica-ok-accent" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return (
+            <section className="content-panel incentive-agent">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Il tuo risultato</p>
+                  <h2>{periodoLabel(gareView)}</h2>
+                </div>
+              </div>
+              <div className="agent-list">
+                <div className={rowCls}>
+                  <span className="incentive-rank">{myIndex + 1}º</span>
                   <span className="incentive-name">
-                    <strong>{r.nome}</strong>
-                    <small>
-                      {primo && vincitoreValido
-                        ? `Vincitore — Premio ${medal.cat}: ${formatEur(
-                            medal.val
-                          )}${seiTu ? " — sei tu" : ""}`
-                        : primo && obiettivoGara
-                          ? "Primo in classifica — obiettivo non raggiunto"
-                          : `Premio ${medal.cat}: ${labelVal}${
-                              seiTu ? " — sei tu" : ""
-                            }`}
-                    </small>
+                    <strong>{me?.nome}</strong>
+                    <small>{caption}</small>
                   </span>
                   <strong className="incentive-amount">
-                    {formatEur(r.imponibile)}
+                    {formatEur(me?.imponibile ?? 0)}
                   </strong>
                 </div>
-              );
-            })}
-          </div>
-          {obiettivoGara &&
-            ranking[0] &&
-            ranking[0].imponibile < targetObiettivo && (
-              <p className="form-error">
-                Nessun vincitore dell&apos;Oro: il 1° in classifica non ha
-                raggiunto l&apos;obiettivo di {formatEur(targetObiettivo)} del
-                periodo.
+              </div>
+              {primo && !oroValido && obiettivoGara && (
+                <p className="form-error">
+                  Per vincere il Premio Oro devi raggiungere l&apos;obiettivo di{" "}
+                  {formatEur(targetObiettivo)} del periodo.
+                </p>
+              )}
+              <p className="settings-help">
+                I risultati degli altri agenti sono visibili solo
+                all&apos;amministratore.
               </p>
-            )}
-          <p className="settings-help">
-            Classifica aggiornata in tempo reale sul periodo{" "}
-            {periodoLabel(gareView)}.
-          </p>
-        </section>
-      )}
+            </section>
+          );
+        })()}
     </div>
   );
 }
