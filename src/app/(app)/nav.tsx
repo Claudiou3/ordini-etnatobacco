@@ -20,7 +20,7 @@ export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
           { href: "/console", label: "Consolle" },
           { href: "/agenti", label: "Agenti" },
         ]
-      : []),
+      : [{ href: "/obiettivi-agente", label: "Obiettivi" }]),
   ];
 
   return (
