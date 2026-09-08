@@ -122,7 +122,7 @@ export default async function DashboardPage() {
 
                   {g.reached ? (
                     <p className="form-note incentive-ok" role="status">
-                      🎉 Obiettivo raggiunto! Premi:{" "}
+                      Obiettivo raggiunto! Premi:{" "}
                       <strong>{formatEur(g.prize)}</strong>
                     </p>
                   ) : (
@@ -164,8 +164,8 @@ export default async function DashboardPage() {
                 </div>
 
                 <p className="incentive-missing">
-                  🏆 Il premio va all&apos;agente con il maggior imponibile del
-                  mese (ordini non annullati): ogni ordine conta per scalare la
+                  Il premio va all&apos;agente con il maggior imponibile del mese
+                  (ordini non annullati): ogni ordine conta per scalare la
                   classifica!
                 </p>
               </section>

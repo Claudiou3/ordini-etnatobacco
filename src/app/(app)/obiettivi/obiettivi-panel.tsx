@@ -84,6 +84,8 @@ export function ObiettiviPanel({
   const gareMese = gare
     .filter((g) => g.month === monthValue)
     .sort((a, b) => a.createdAt - b.createdAt);
+  const obiettivoGara = gareMese.find((g) => g.kind === "obiettivo") ?? null;
+  const venditeGare = gareMese.filter((g) => g.kind === "vendite");
 
   return (
     <>
@@ -137,12 +139,6 @@ export function ObiettiviPanel({
           <div className="agent-list">
             {gareMese.map((g) => (
               <div key={g.id} className="incentive-top-row gara-row">
-                <span
-                  className={`gara-kind gara-kind-${g.kind}`}
-                  aria-hidden="true"
-                >
-                  {g.kind === "obiettivo" ? "🎯" : "🏆"}
-                </span>
                 <span className="incentive-name">
                   <strong>
                     {g.kind === "obiettivo"
@@ -213,7 +209,7 @@ export function ObiettiviPanel({
 
           <div className="gare-new-grid">
             <div className="gara-new-block">
-              <h3>🎯 Obiettivo imponibile</h3>
+              <h3>Obiettivo imponibile</h3>
               <p className="settings-help">
                 Vince il premio <strong>ogni agente</strong> che nel mese
                 raggiunge l&apos;obiettivo di imponibile indicato (ordini non
@@ -270,7 +266,7 @@ export function ObiettiviPanel({
             </div>
 
             <div className="gara-new-block">
-              <h3>🏆 Gara miglior venditore</h3>
+              <h3>Gara miglior venditore</h3>
               <p className="settings-help">
                 Premio <strong>unico</strong> all&apos;agente con il maggior
                 imponibile complessivo del mese (il 1° in classifica).
@@ -332,32 +328,94 @@ export function ObiettiviPanel({
             <h2>{monthLabel(monthValue)}</h2>
           </div>
         </div>
+
         {ranking.length === 0 ? (
           <p className="empty-state">
             Nessun ordine attivo in {monthLabel(monthValue)}.
           </p>
         ) : (
-          <div className="agent-list">
-            {ranking.slice(0, 10).map((r, i) => (
-              <div key={r.id} className="incentive-top-row">
-                <span className="incentive-rank">{i + 1}º</span>
-                <span className="incentive-name">
-                  <strong>{r.nome}</strong>
-                  <small>{r.email}</small>
-                </span>
-                <strong className="incentive-amount">
-                  {formatEur(r.imponibile)}
-                </strong>
+          <>
+            {venditeGare.length > 0 && (
+              <div className="classifica-block">
+                <h3>
+                  Gara miglior venditore — primi 3 (premio{" "}
+                  {formatEur(venditeGare[0].prize)})
+                </h3>
+                <div className="agent-list">
+                  {ranking.slice(0, 3).map((r, i) => {
+                    const vincitore = i === 0;
+                    return (
+                      <div
+                        key={r.id}
+                        className={`incentive-top-row classifica-row${
+                          vincitore ? " classifica-ok" : ""
+                        }${!vincitore ? " classifica-top3" : ""}`}
+                      >
+                        <span className="incentive-rank">{i + 1}º</span>
+                        <span className="incentive-name">
+                          <strong>{r.nome}</strong>
+                          <small>
+                            {vincitore
+                              ? "Vincitore della gara del mese"
+                              : r.email}
+                          </small>
+                        </span>
+                        <strong className="incentive-amount">
+                          {formatEur(r.imponibile)}
+                        </strong>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            ))}
-          </div>
+            )}
+
+            <div className="classifica-block">
+              <h3>
+                {obiettivoGara
+                  ? `Raggiungimento obiettivo di ${formatEur(
+                      obiettivoGara.target ?? 0
+                    )} (in verde chi l'ha raggiunto)`
+                  : "Classifica completa del mese"}
+              </h3>
+              <div className="agent-list">
+                {ranking.slice(0, 50).map((r, i) => {
+                  const raggiunto = obiettivoGara
+                    ? r.imponibile >= (obiettivoGara.target ?? 0)
+                    : false;
+                  return (
+                    <div
+                      key={r.id}
+                      className={`incentive-top-row classifica-row${
+                        raggiunto ? " classifica-ok" : ""
+                      }`}
+                    >
+                      <span className="incentive-rank">{i + 1}º</span>
+                      <span className="incentive-name">
+                        <strong>{r.nome}</strong>
+                        <small>
+                          {r.email}
+                          {raggiunto
+                            ? " — obiettivo raggiunto"
+                            : r.imponibile > 0
+                              ? ""
+                              : " — nessun ordine"}
+                        </small>
+                      </span>
+                      <strong className="incentive-amount">
+                        {formatEur(r.imponibile)}
+                      </strong>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
         )}
-        {ranking.length > 0 && (
-          <p className="settings-help">
-            Se per questo mese è attiva una gara &quot;miglior venditore&quot;,
-            il 1° in classifica vince il relativo premio.
-          </p>
-        )}
+        <p className="settings-help">
+          Riga verde = obiettivo raggiunto (o vincitore della gara miglior
+          venditore). In evidenza i primi 3 della gara vendite.
+        </p>
       </section>
     </>
   );

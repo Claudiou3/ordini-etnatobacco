@@ -1404,11 +1404,6 @@ h2 { font-size: 21px; }
 .gara-form .form-actions .form-note {
   margin: 0;
 }
-.gara-kind {
-  font-size: 20px;
-  flex: none;
-  line-height: 1;
-}
 .gara-row .incentive-name {
   flex: 1;
 }
@@ -1416,6 +1411,31 @@ h2 { font-size: 21px; }
   .gare-new-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Classifica obiettivi/gara vendite */
+.classifica-block {
+  margin-top: 14px;
+}
+.classifica-block h3 {
+  font-size: 14px;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+.incentive-top-row.classifica-ok {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+}
+.incentive-top-row.classifica-ok .incentive-rank,
+.incentive-top-row.classifica-ok .incentive-amount {
+  color: #047857;
+}
+.incentive-top-row.classifica-ok .incentive-name small {
+  color: #059669;
+}
+.incentive-top-row.classifica-top3 {
+  background: #fffbeb;
+  border-color: #fcd34d;
 }
 
 
