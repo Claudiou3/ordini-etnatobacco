@@ -1,8 +1,13 @@
 "use server";
 
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { revalidatePath } from "next/cache";
+import XLSXPopulate from "xlsx-populate";
 import { getCurrentAdmin } from "@/lib/supabase/session";
-import { saveCatalogPrices, saveDiscounts, savePrices, saveStep4 } from "@/lib/catalog/template";
+import { saveCatalogPrices, saveDiscounts, savePrices, saveStep4, invalidateCatalogCache } from "@/lib/catalog/template";
+import { uploadWorkingTemplate } from "@/lib/orders/storage";
+import { appDataPath } from "@/lib/data-dir";
 
 export type CatalogActionState = { error?: string; success?: boolean; applied?: number };
 
@@ -141,4 +146,61 @@ export async function applyBulkStep4Action(
   }
   revalidatePath("/catalogo");
   return { success: true, applied: validRows.length };
+}
+
+export type TemplateUploadState = {
+  error?: string;
+  success?: boolean;
+};
+
+/**
+ * Sostituisce il file di lavoro del catalogo (ordine_template.xlsx).
+ * Online (Vercel) viene caricato su Supabase Storage; in locale viene salvato
+ * in data/ordine_template.xlsx. Il file originale nella root resta intatto.
+ */
+export async function uploadTemplateAction(
+  _prev: TemplateUploadState,
+  formData: FormData
+): Promise<TemplateUploadState> {
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return { error: "Seleziona un file Excel (.xlsx)." };
+  }
+  if (!file.name.toLowerCase().endsWith(".xlsx")) {
+    return { error: "Il file deve avere estensione .xlsx." };
+  }
+  const buffer = Buffer.from(await file.arrayBuffer());
+  if (buffer.length === 0 || buffer.length > 30 * 1024 * 1024) {
+    return { error: "File vuoto o troppo grande (max 30 MB)." };
+  }
+
+  // Validazione: deve essere un Excel apribile.
+  try {
+    await XLSXPopulate.fromDataAsync(buffer as unknown as ArrayBuffer);
+  } catch {
+    return { error: "Il file non è un file Excel valido (.xlsx)." };
+  }
+
+  const uploaded = await uploadWorkingTemplate(buffer);
+  if (!uploaded) {
+    // Modalità locale / senza Supabase: aggiorna il file di lavoro.
+    try {
+      await fs.mkdir(path.dirname(appDataPath("ordine_template.xlsx")), {
+        recursive: true,
+      });
+      await fs.writeFile(appDataPath("ordine_template.xlsx"), buffer);
+    } catch {
+      return { error: "Impossibile salvare il file (cartella non scrivibile)." };
+    }
+  }
+
+  invalidateCatalogCache();
+  revalidatePath("/catalogo");
+  revalidatePath("/");
+  return { success: true };
 }

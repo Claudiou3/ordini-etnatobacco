@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentAdmin } from "@/lib/supabase/session";
 import { readCatalog } from "@/lib/catalog/template";
 import { CatalogManager } from "./catalog-manager";
+import { TemplateUpload } from "./template-upload";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ export default async function CatalogoPage() {
   if (!admin) redirect("/login");
 
   const items = await readCatalog();
+  const canEdit = !admin.subAdmin;
 
   return (
     <>
@@ -26,15 +28,17 @@ export default async function CatalogoPage() {
         </div>
       </header>
 
+      {canEdit && <TemplateUpload />}
+
       {items.length === 0 ? (
         <section className="content-panel">
           <p className="empty-state">
-            Catalogo non trovato. Copia <code>ordine_template.xlsx</code> nella
-            cartella del progetto.
+            Catalogo non trovato. Carica il file <code>ordine_template.xlsx</code>{" "}
+            con il pannello qui sopra oppure copialo nella cartella del progetto.
           </p>
         </section>
       ) : (
-        <CatalogManager items={items} canEdit={!admin.subAdmin} />
+        <CatalogManager items={items} canEdit={canEdit} />
       )}
     </>
   );
