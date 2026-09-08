@@ -3,7 +3,7 @@
 import { useEffect, useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { addGaraAction, deleteGaraAction, type GaraActionState } from "./actions";
-import type { IncentiveGara, ClassificaRiga } from "@/lib/incentives";
+import type { IncentiveGara, IncentiveKind, ClassificaRiga } from "@/lib/incentives";
 import { formatEur } from "@/lib/format";
 
 const MONTH_NAMES = [
@@ -11,62 +11,73 @@ const MONTH_NAMES = [
   "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
 ];
 
-function monthParts(month?: string): { mese: string; anno: string } {
-  if (month && /^\d{4}-\d{2}$/.test(month)) {
-    const [y, m] = month.split("-");
-    return { mese: String(Number(m)), anno: y };
+function dataLabel(date: string): string {
+  const [y, m, d] = date.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function periodLabel(from: string, to: string): string {
+  const month = from.slice(0, 7);
+  if (/^\d{4}-\d{2}$/.test(month) && from === `${month}-01`) {
+    const last = new Date(Date.UTC(Number(month.split("-")[0]), Number(month.split("-")[1]), 0))
+      .toISOString()
+      .slice(0, 10);
+    if (to === last) {
+      const [y, m] = month.split("-");
+      return `${MONTH_NAMES[Number(m) - 1] ?? m} ${y}`;
+    }
   }
-  const now = new Date();
-  return {
-    mese: String(now.getMonth() + 1),
-    anno: String(now.getFullYear()),
-  };
+  return `dal ${dataLabel(from)} al ${dataLabel(to)}`;
 }
 
-function monthLabel(month?: string): string {
-  if (!month || !/^\d{4}-\d{2}$/.test(month)) return "";
-  const [y, m] = month.split("-");
-  return `${MONTH_NAMES[Number(m) - 1] ?? m} ${y}`;
-}
-
-function kindText(kind: IncentiveGara["kind"]): string {
+function kindText(kind: IncentiveKind): string {
   return kind === "obiettivo"
     ? "Obiettivo imponibile"
     : "Gara miglior venditore";
 }
 
+function todayISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function lastDayOfMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
 export function ObiettiviPanel({
   gare,
   canEdit,
-  month,
+  range,
   ranking,
 }: {
   gare: IncentiveGara[];
   canEdit: boolean;
-  month: string;
+  range: { from: string; to: string };
   ranking: ClassificaRiga[];
 }) {
   const router = useRouter();
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => currentYear - 1 + i);
 
-  const init = monthParts(month);
-  const [mese, setMese] = useState(init.mese);
-  const [anno, setAnno] = useState(init.anno);
-  const monthValue = `${anno}-${String(Number(mese)).padStart(2, "0")}`;
+  // Periodo usato per la CLASSIFICA (ricaricata dal server tramite ?da&a).
+  const [cFrom, setCFrom] = useState(range.from);
+  const [cTo, setCTo] = useState(range.to);
 
+  // Periodo di default per la CREAZIONE di nuove gare.
+  const now = todayISO();
+  const initFrom = range.from ?? now.slice(0, 8) + "01";
+  const initTo = range.to ?? now;
+  const [nFrom, setNFrom] = useState(initFrom);
+  const [nTo, setNTo] = useState(initTo);
+
+  // Sincronizza la classifica quando il periodo cambia (navigazione ?da&a).
   useEffect(() => {
-    const next = monthParts(month);
-    setMese(next.mese);
-    setAnno(next.anno);
-  }, [month]);
-
-  function cambiaMese(nextMese: string, nextAnno: string) {
-    setMese(nextMese);
-    setAnno(nextAnno);
-    const value = `${nextAnno}-${String(Number(nextMese)).padStart(2, "0")}`;
-    router.replace(`/obiettivi?mese=${value}`);
-  }
+    setCFrom(range.from);
+    setCTo(range.to);
+  }, [range.from, range.to]);
 
   const [objState, objAction, objPending] = useActionState<
     GaraActionState,
@@ -81,11 +92,18 @@ export function ObiettiviPanel({
     FormData
   >(deleteGaraAction, {});
 
-  const gareMese = gare
-    .filter((g) => g.month === monthValue)
-    .sort((a, b) => a.createdAt - b.createdAt);
-  const obiettivoGara = gareMese.find((g) => g.kind === "obiettivo") ?? null;
-  const venditeGare = gareMese.filter((g) => g.kind === "vendite");
+  function aggiornaClassifica() {
+    if (cFrom && cTo) {
+      const [f, t] = cFrom <= cTo ? [cFrom, cTo] : [cTo, cFrom];
+      router.replace(`/obiettivi?da=${f}&a=${t}`);
+    }
+  }
+
+  // Gare dello stesso periodo mostrato in classifica (accoppiamento regola verde).
+  const gareInRange = gare.filter((g) => g.from === cFrom && g.to === cTo);
+  const obiettivoInRange = gareInRange.find((g) => g.kind === "obiettivo");
+  const venditeInRange = gareInRange.filter((g) => g.kind === "vendite");
+  const targetObiettivo = obiettivoInRange?.target ?? 0;
 
   return (
     <>
@@ -93,62 +111,39 @@ export function ObiettiviPanel({
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Obiettivi agenti</p>
-            <h2>{monthLabel(monthValue)}</h2>
+            <h2>Gare configurate</h2>
             <p className="settings-help">
-              Ogni mese puoi attivare più premi in parallelo: un{" "}
-              <strong>obiettivo di imponibile</strong> raggiungibile da tutti
-              gli agenti oppure una <strong>gara miglior venditore</strong> con
-              premio unico al 1° in classifica per imponibile del mese.
+              Ogni gara ha un periodo libero (da… a): un mese intero oppure più
+              mesi. Le gare dello stesso periodo sono accoppiate: per la gara
+              miglior venditore il verde spetta al 1° solo se ha superato anche
+              l&apos;obiettivo della gara obiettivo dello stesso periodo.
             </p>
           </div>
-          {canEdit && (
-            <div className="topbar-actions month-switch">
-              <select
-                className="form-input"
-                aria-label="Mese"
-                value={mese}
-                onChange={(e) => cambiaMese(e.target.value, anno)}
-              >
-                {MONTH_NAMES.map((n, i) => (
-                  <option key={n} value={i + 1}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="form-input"
-                aria-label="Anno"
-                value={anno}
-                onChange={(e) => cambiaMese(mese, e.target.value)}
-              >
-                {years.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
 
-        {gareMese.length === 0 ? (
+        {gare.length === 0 ? (
           <p className="empty-state">
-            Nessuna gara configurata per {monthLabel(monthValue)}.
+            Nessuna gara configurata. Usa la sezione &quot;Crea una nuova
+            gara&quot; qui sotto.
           </p>
         ) : (
           <div className="agent-list">
-            {gareMese.map((g) => (
+            {gare.map((g) => (
               <div key={g.id} className="incentive-top-row gara-row">
                 <span className="incentive-name">
                   <strong>
                     {g.kind === "obiettivo"
                       ? `Obiettivo ${formatEur(g.target ?? 0)}`
                       : `1° classificato${g.note ? ` — ${g.note}` : ""}`}
+                    <small className="gara-period">
+                      {" "}
+                      · {periodLabel(g.from, g.to)}
+                    </small>
                   </strong>
                   <small>
                     {g.kind === "obiettivo"
-                      ? "Premio a ogni agente che raggiunge l'obiettivo del mese"
-                      : "Premio all'agente con il maggior imponibile del mese"}
+                      ? "Premio a ogni agente che raggiunge l'obiettivo nel periodo"
+                      : "Premio all'agente con il maggior imponibile del periodo"}
                   </small>
                 </span>
                 <strong className="incentive-amount">
@@ -160,11 +155,14 @@ export function ObiettiviPanel({
                     onSubmit={(event) => {
                       if (
                         !window.confirm(
-                          `Eliminare la gara "${kindText(g.kind)}" da ${
+                          `Eliminare la gara "${kindText(g.kind)}" (${
                             g.kind === "obiettivo"
                               ? `obiettivo ${formatEur(g.target ?? 0)}`
                               : "miglior venditore"
-                          } (premio ${formatEur(g.prize)})?`
+                          }, premio ${formatEur(g.prize)}, ${periodLabel(
+                            g.from,
+                            g.to
+                          )})?`
                         )
                       ) {
                         event.preventDefault();
@@ -203,22 +201,52 @@ export function ObiettiviPanel({
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Crea una nuova gara</p>
-              <h2>Premi per {monthLabel(monthValue)}</h2>
+              <h2>Premi su periodo libero</h2>
             </div>
+          </div>
+
+          <div className="gara-range-grid">
+            <label className="form-field">
+              <span className="form-label">Periodo da (incluso)</span>
+              <input
+                className="form-input"
+                type="date"
+                value={nFrom}
+                onChange={(e) => setNFrom(e.target.value)}
+              />
+            </label>
+            <label className="form-field">
+              <span className="form-label">a (incluso)</span>
+              <input
+                className="form-input"
+                type="date"
+                value={nTo}
+                onChange={(e) => setNTo(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="outline-button"
+              onClick={() => {
+                setNFrom(now.slice(0, 8) + "01");
+                setNTo(lastDayOfMonth(now.slice(0, 7)));
+              }}
+            >
+              Mese corrente
+            </button>
           </div>
 
           <div className="gare-new-grid">
             <div className="gara-new-block">
               <h3>Obiettivo imponibile</h3>
               <p className="settings-help">
-                Vince il premio <strong>ogni agente</strong> che nel mese
-                raggiunge l&apos;obiettivo di imponibile indicato (ordini non
-                annullati).
+                Vince il premio <strong>ogni agente</strong> che nel periodo
+                raggiunge l&apos;obiettivo di imponibile (ordini non annullati).
               </p>
               <form action={objAction} className="incentive-form gara-form">
                 <input type="hidden" name="kind" value="obiettivo" />
-                <input type="hidden" name="mese" value={mese} />
-                <input type="hidden" name="anno" value={anno} />
+                <input type="hidden" name="from" value={nFrom} />
+                <input type="hidden" name="to" value={nTo} />
                 <label className="form-field">
                   <span className="form-label">Obiettivo (€ imponibile)</span>
                   <input
@@ -269,12 +297,13 @@ export function ObiettiviPanel({
               <h3>Gara miglior venditore</h3>
               <p className="settings-help">
                 Premio <strong>unico</strong> all&apos;agente con il maggior
-                imponibile complessivo del mese (il 1° in classifica).
+                imponibile del periodo. Se per lo stesso periodo esiste una gara
+                obiettivo, il vincitore deve averla raggiunta.
               </p>
               <form action={venAction} className="incentive-form gara-form">
                 <input type="hidden" name="kind" value="vendite" />
-                <input type="hidden" name="mese" value={mese} />
-                <input type="hidden" name="anno" value={anno} />
+                <input type="hidden" name="from" value={nFrom} />
+                <input type="hidden" name="to" value={nTo} />
                 <label className="form-field">
                   <span className="form-label">Premio 1° classificato (€)</span>
                   <input
@@ -324,40 +353,74 @@ export function ObiettiviPanel({
       <section className="content-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Classifica imponibile</p>
-            <h2>{monthLabel(monthValue)}</h2>
+            <p className="eyebrow">Classifica imponibile del periodo</p>
+            <h2>{periodLabel(cFrom, cTo)}</h2>
+          </div>
+          <div className="topbar-actions range-switch">
+            <label className="form-field">
+              <span className="form-label">Da</span>
+              <input
+                className="form-input"
+                type="date"
+                value={cFrom}
+                onChange={(e) => setCFrom(e.target.value)}
+              />
+            </label>
+            <label className="form-field">
+              <span className="form-label">A</span>
+              <input
+                className="form-input"
+                type="date"
+                value={cTo}
+                onChange={(e) => setCTo(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={aggiornaClassifica}
+            >
+              Aggiorna
+            </button>
           </div>
         </div>
 
         {ranking.length === 0 ? (
           <p className="empty-state">
-            Nessun ordine attivo in {monthLabel(monthValue)}.
+            Nessun ordine attivo nel periodo {periodLabel(cFrom, cTo)}.
           </p>
         ) : (
           <>
-            {venditeGare.length > 0 && (
+            {venditeInRange.length > 0 && (
               <div className="classifica-block">
                 <h3>
                   Gara miglior venditore — primi 3 (premio{" "}
-                  {formatEur(venditeGare[0].prize)})
+                  {formatEur(venditeInRange[0].prize)})
                 </h3>
                 <div className="agent-list">
                   {ranking.slice(0, 3).map((r, i) => {
-                    const vincitore = i === 0;
+                    const ePrimo = i === 0;
+                    const vincitoreValido =
+                      ePrimo &&
+                      (obiettivoInRange
+                        ? r.imponibile >= targetObiettivo
+                        : true);
                     return (
                       <div
                         key={r.id}
                         className={`incentive-top-row classifica-row${
-                          vincitore ? " classifica-ok" : ""
-                        }${!vincitore ? " classifica-top3" : ""}`}
+                          vincitoreValido ? " classifica-ok" : ""
+                        }${!vincitoreValido ? " classifica-top3" : ""}`}
                       >
                         <span className="incentive-rank">{i + 1}º</span>
                         <span className="incentive-name">
                           <strong>{r.nome}</strong>
                           <small>
-                            {vincitore
-                              ? "Vincitore della gara del mese"
-                              : r.email}
+                            {ePrimo && vincitoreValido
+                              ? "Vincitore della gara del periodo"
+                              : ePrimo && obiettivoInRange
+                                ? "Primo in classifica — obiettivo non ancora raggiunto"
+                                : r.email}
                           </small>
                         </span>
                         <strong className="incentive-amount">
@@ -367,21 +430,29 @@ export function ObiettiviPanel({
                     );
                   })}
                 </div>
+                {ranking[0] && obiettivoInRange &&
+                  ranking[0].imponibile < targetObiettivo && (
+                    <p className="form-error">
+                      Nessun vincitore per la gara miglior venditore: il 1° in
+                      classifica non ha raggiunto l&apos;obiettivo di{" "}
+                      {formatEur(targetObiettivo)} del periodo.
+                    </p>
+                  )}
               </div>
             )}
 
             <div className="classifica-block">
               <h3>
-                {obiettivoGara
+                {obiettivoInRange
                   ? `Raggiungimento obiettivo di ${formatEur(
-                      obiettivoGara.target ?? 0
+                      targetObiettivo
                     )} (in verde chi l'ha raggiunto)`
-                  : "Classifica completa del mese"}
+                  : "Classifica completa del periodo"}
               </h3>
               <div className="agent-list">
                 {ranking.slice(0, 50).map((r, i) => {
-                  const raggiunto = obiettivoGara
-                    ? r.imponibile >= (obiettivoGara.target ?? 0)
+                  const raggiunto = obiettivoInRange
+                    ? r.imponibile >= targetObiettivo
                     : false;
                   return (
                     <div
@@ -413,8 +484,10 @@ export function ObiettiviPanel({
           </>
         )}
         <p className="settings-help">
-          Riga verde = obiettivo raggiunto (o vincitore della gara miglior
-          venditore). In evidenza i primi 3 della gara vendite.
+          Riga verde: obiettivo raggiunto nel periodo. Per la gara miglior
+          venditore il verde (vincitore) spetta al 1° solo se ha superato anche
+          l&apos;obiettivo accoppiato dello stesso periodo; se la gara è
+          individuale, vince il primo in classifica.
         </p>
       </section>
     </>

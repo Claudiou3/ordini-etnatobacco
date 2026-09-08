@@ -12,7 +12,7 @@ export type GaraActionState = {
   success?: boolean;
 };
 
-/** Crea/aggiorna una gara del mese (solo amministratore principale). */
+/** Crea/aggiorna una gara su un periodo libero (solo amministratore principale). */
 export async function addGaraAction(
   _prev: GaraActionState,
   formData: FormData
@@ -24,16 +24,8 @@ export async function addGaraAction(
 
   const kindRaw = String(formData.get("kind") ?? "obiettivo");
   const kind = kindRaw === "vendite" ? "vendite" : "obiettivo";
-  const monthNum = Number(formData.get("mese") ?? 0);
-  const year = Number(formData.get("anno") ?? 0);
-
-  if (!Number.isInteger(monthNum) || monthNum < 1 || monthNum > 12) {
-    return { error: "Seleziona un mese valido." };
-  }
-  if (!Number.isInteger(year) || year < 2020 || year > 2100) {
-    return { error: "Seleziona un anno valido." };
-  }
-  const month = `${year}-${String(monthNum).padStart(2, "0")}`;
+  const from = String(formData.get("from") ?? "").trim();
+  const to = String(formData.get("to") ?? "").trim();
   const prize = Number(
     String(formData.get("prize") ?? "").replace(",", ".")
   );
@@ -46,7 +38,7 @@ export async function addGaraAction(
       ? String(formData.get("note") ?? "").trim() || undefined
       : undefined;
 
-  const result = await saveIncentiveGara({ kind, month, prize, target, note });
+  const result = await saveIncentiveGara({ kind, from, to, prize, target, note });
   if (!result.ok) {
     return { error: result.error ?? "Errore durante il salvataggio." };
   }
@@ -76,3 +68,4 @@ export async function deleteGaraAction(
   revalidatePath("/dashboard");
   return { success: true };
 }
+

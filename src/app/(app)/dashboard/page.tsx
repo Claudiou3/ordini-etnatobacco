@@ -7,7 +7,7 @@ import {
   countUnreadAdminOrders,
 } from "@/lib/orders";
 import { getReadOrderIds } from "@/lib/orders/read";
-import { getGareAgente, monthLabel } from "@/lib/incentives";
+import { getGareAgente, periodoLabel } from "@/lib/incentives";
 import { formatEur, formatDate } from "@/lib/format";
 import { LogoutButton } from "../logout-button";
 import { NewOrderPopup } from "../console/new-order-popup";
@@ -83,15 +83,15 @@ export default async function DashboardPage() {
                 <section key={g.id} className="content-panel incentive-agent">
                   <div className="panel-heading">
                     <div>
-                      <p className="eyebrow">Obiettivo del mese</p>
-                      <h2>{monthLabel(gareView.month)}</h2>
+                      <p className="eyebrow">Obiettivo del periodo</p>
+                      <h2>{periodoLabel(gareView)}</h2>
                     </div>
                   </div>
 
                   <div className="incentive-agent-grid">
                     <div>
                       <span className="stat-label">
-                        Obiettivo del mese (imponibile)
+                        Obiettivo del periodo (imponibile)
                       </span>
                       <strong className="incentive-target">
                         {formatEur(target)}
@@ -140,7 +140,7 @@ export default async function DashboardPage() {
                 <div className="panel-heading">
                   <div>
                     <p className="eyebrow">Gara miglior venditore</p>
-                    <h2>{monthLabel(gareView.month)}</h2>
+                    <h2>{periodoLabel(gareView)}</h2>
                   </div>
                 </div>
 
@@ -164,10 +164,22 @@ export default async function DashboardPage() {
                 </div>
 
                 <p className="incentive-missing">
-                  Il premio va all&apos;agente con il maggior imponibile del mese
-                  (ordini non annullati): ogni ordine conta per scalare la
-                  classifica!
+                  Il premio va all&apos;agente con il maggior imponibile del
+                  periodo (ordini non annullati): ogni ordine conta per scalare
+                  la classifica!
                 </p>
+                {g.requisito ? (
+                  <p className="form-note incentive-ok" role="status">
+                    Per vincere devi raggiungere anche l&apos;obiettivo di{" "}
+                    <strong>{formatEur(g.requisito)}</strong> dello stesso
+                    periodo.
+                  </p>
+                ) : (
+                  <p className="settings-help">
+                    Gara singola: vince chi totalizza il maggior imponibile del
+                    periodo.
+                  </p>
+                )}
               </section>
             );
           })}
