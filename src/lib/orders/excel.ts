@@ -1,7 +1,10 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { existsSync } from "node:fs";
-import XLSXPopulate from "xlsx-populate";
+import XLSXPopulate, {
+  type Workbook,
+  type Sheet,
+} from "xlsx-populate";
 import JSZip from "jszip";
 import { appDataDir, appDataPath, appRootPath } from "@/lib/data-dir";
 import {
@@ -75,6 +78,29 @@ export type OrderExcelInput = {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/**
+ * Trova la riga assoluta (1-based) che contiene un'etichetta nella colonna N
+ * (es. "Trasporto", "IVA Trasporto"). Serve per scrivere i totali nella zona
+ * corretta anche quando il template ha righe articolo aggiunte o spostate.
+ */
+function findMarkerRow(
+  sheet: Sheet,
+  text: string
+): number | null {
+  try {
+    const range = sheet.usedRange();
+    const start = range.startCell().rowNumber();
+    const rows = range.value() as unknown[][];
+    for (let i = 0; i < rows.length; i++) {
+      const cell = String((rows[i] ?? [])[13] ?? "").trim();
+      if (cell === text) return start + i;
+    }
+  } catch {
+    // struttura non leggibile: il chiamante userà i valori di riserva
+  }
+  return null;
 }
 
 /**
@@ -245,14 +271,27 @@ export async function generateOrderWorkbook(
     sheet.cell(row, 18).formula(`O${row}*P${row}`);
   }
 
-  // Totali (valori espliciti al posto delle formule)
-  sheet.cell(288, 17).value(round2(totali.imponibile)); // Q: imponibile articoli
-  sheet.cell(288, 18).value(round2(totali.imponibile + totali.iva)); // R: + IVA
-  sheet.cell(291, 15).value(round2(totali.trasporto)); // O: trasporto
-  sheet.cell(293, 15).value(round2(totali.ivaTrasporto)); // O: IVA trasporto
-  // N: trasporto + IVA trasporto (come da formula template N294 = O291+O293)
-  sheet.cell(294, 14).value(round2(totali.trasporto + totali.ivaTrasporto));
-  sheet.cell(290, 18).value(round2(totali.totale)); // R: totale ordine
+  // Totali (valori espliciti al posto delle formule). Le righe vengono
+  // individuate dal template tramite le etichette "Trasporto"/"IVA Trasporto":
+  // in questo modo gli importi finiscono SEMPRE nella zona giusta, anche se il
+  // file ha righe articolo aggiunte o spostate rispetto all'originale.
+  const rowTrasporto = findMarkerRow(sheet, "Trasporto") ?? 290;
+  const rowIvaTrasporto = findMarkerRow(sheet, "IVA Trasporto") ?? 292;
+  const rowImponibile = rowTrasporto - 2;
+
+  sheet.cell(rowImponibile, 17).value(round2(totali.imponibile)); // Q: imponibile articoli
+  sheet.cell(rowImponibile, 18).value(
+    round2(totali.imponibile + totali.iva)
+  ); // R: imponibile + IVA
+  sheet.cell(rowTrasporto + 1, 15).value(round2(totali.trasporto)); // O: trasporto
+  sheet.cell(rowIvaTrasporto + 1, 15).value(
+    round2(totali.ivaTrasporto)
+  ); // O: IVA trasporto
+  // N: trasporto + IVA trasporto
+  sheet.cell(rowTrasporto + 4, 14).value(
+    round2(totali.trasporto + totali.ivaTrasporto)
+  );
+  sheet.cell(rowTrasporto, 18).value(round2(totali.totale)); // R: totale ordine
 
   // Genera il file e aggiunge i valori in cache alle celle formula Q/R delle
   // righe ordinate: formule presenti + importi subito visibili.
