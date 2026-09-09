@@ -627,29 +627,39 @@ export async function submitOrder(
     },
     items: orderItems,
   };
-  await saveOrderDetail(detail);
+  try {
+    await saveOrderDetail(detail);
 
-  revalidatePath("/ordini");
-  revalidatePath("/dashboard");
-  revalidatePath("/clienti");
+    revalidatePath("/ordini");
+    revalidatePath("/dashboard");
+    revalidatePath("/clienti");
 
-  // Invio email con allegato
-  let emailResult: Awaited<ReturnType<typeof sendOrderEmail>> | null = null;
-  if (excelBuffer) {
-    emailResult = await sendOrderEmail({
-      subject: `Nuovo ordine ${numero} — ${ragioneSociale}`,
-      text: `Ordine ${numero} del ${dataOrdine} per ${ragioneSociale}.\nTotale: € ${totale.toFixed(2)}.\nIn allegato il modulo Excel compilato.`,
-      attachment: { filename: `${sanitizeFileBase(fileBase)}.xlsx`, content: excelBuffer },
-    });
+    // Invio email con allegato
+    let emailResult: Awaited<ReturnType<typeof sendOrderEmail>> | null = null;
+    if (excelBuffer) {
+      emailResult = await sendOrderEmail({
+        subject: `Nuovo ordine ${numero} — ${ragioneSociale}`,
+        text: `Ordine ${numero} del ${dataOrdine} per ${ragioneSociale}.\nTotale: € ${totale.toFixed(2)}.\nIn allegato il modulo Excel compilato.`,
+        attachment: { filename: `${sanitizeFileBase(fileBase)}.xlsx`, content: excelBuffer },
+      });
+    }
+
+    return {
+      success: true,
+      numero_ordine: numero,
+      fileUrl: fileUrl ?? undefined,
+      totale,
+      emailSent: emailResult?.sent ?? false,
+      emailError: emailResult?.error ?? excelError,
+    };
+  } catch (err) {
+    // In produzione React nasconde l'errore dietro il generico #441:
+    // qui riportiamo il motivo reale per poterlo correggere.
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      error:
+        "Errore imprevisto durante il salvataggio dell'ordine: " + msg,
+    };
   }
-
-  return {
-    success: true,
-    numero_ordine: numero,
-    fileUrl: fileUrl ?? undefined,
-    totale,
-    emailSent: emailResult?.sent ?? false,
-    emailError: emailResult?.error ?? excelError,
-  };
 }
 
