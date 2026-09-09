@@ -43,11 +43,23 @@ const MACRO_CATEGORIES: { name: string; patterns: string[] }[] = [
   },
   {
     name: "De Tomaso Expo Terra",
-    patterns: ["De Tomaso Expo Terra 48pz", "De Tomaso Expo Terra 144pz"],
+    patterns: [
+      "De Tomaso Expo Terra 48pz",
+      "De Tomaso Expo Terra 72pz",
+      "De Tomaso Expo Terra 144pz",
+    ],
   },
   {
-    name: "IOI Expo",
-    patterns: ["IOI Expo Banco 24pz", "IOI Expo Terra 48pz", "IOI Expo Terra 80pz"],
+    name: "IOI Expo Banco",
+    patterns: ["IOI Expo Banco 24pz"],
+  },
+  {
+    name: "IOI Expo Terra",
+    patterns: [
+      "IOI Expo Terra 48pz",
+      "IOI Expo Terra 72pz",
+      "IOI Expo Terra 80pz",
+    ],
   },
 ];
 
