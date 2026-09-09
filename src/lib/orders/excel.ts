@@ -104,6 +104,38 @@ function findMarkerRow(
 }
 
 /**
+ * Colonna K = BARCODE. I codici con 11+ cifre verrebbero mostrati da Excel
+ * in notazione scientifica (es. 8,05025E+12) se la cella non ha un formato
+ * numerico dedicato. Applica il formato intero "0" ai soli valori numerici
+ * della colonna: il barcode resta lo stesso numero, ma viene visualizzato
+ * per intero (8050249561215). Non tocca valori, formule o altre colonne.
+ */
+function formatBarcodeColumn(sheet: Sheet): void {
+  try {
+    const range = sheet.usedRange();
+    const start = range.startCell().rowNumber();
+    const rows = range.value() as unknown[][];
+    for (let i = 0; i < rows.length; i++) {
+      const value = (rows[i] ?? [])[10]; // colonna K (1-based: 11)
+      if (
+        typeof value === "number" &&
+        Number.isFinite(value) &&
+        Number.isInteger(value) &&
+        Math.abs(value) >= 10_000_000_000
+      ) {
+        try {
+          sheet.cell(start + i, 11).style("numberFormat", "0");
+        } catch {
+          // cella non scrivibile (es. parte di un'area unita): salta e continua
+        }
+      }
+    }
+  } catch {
+    // struttura non applicabile: il file resta invariato
+  }
+}
+
+/**
  * Inserisce il valore in cache <v> dentro una cella formula <c...><f>...</f></c>.
  * Le formule restano (Excel/altri ricalcolano se necessario), ma il valore
  * salvato rende l'importo subito visibile anche nei programmi che NON
@@ -292,6 +324,9 @@ export async function generateOrderWorkbook(
     round2(totali.trasporto + totali.ivaTrasporto)
   );
   sheet.cell(rowTrasporto, 18).value(round2(totali.totale)); // R: totale ordine
+
+  // Colonna BARCODE: forza la visualizzazione del codice completo (no E+).
+  formatBarcodeColumn(sheet);
 
   // Genera il file e aggiunge i valori in cache alle celle formula Q/R delle
   // righe ordinate: formule presenti + importi subito visibili.
