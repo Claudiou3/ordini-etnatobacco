@@ -31,6 +31,9 @@ export function CatalogManager({
   const [pending, startTransition] = useTransition();
   const [step4Busy, setStep4Busy] = useState<number | null>(null);
   const [bulkStep4, setBulkStep4] = useState("si");
+  // Valore immediato delle caselle "multiplo di 4" (aggiornamento ottimistico:
+  // la spunta non deve "saltare" in attesa della risposta del server).
+  const [step4Values, setStep4Values] = useState<Record<number, boolean>>({});
   const router = useRouter();
 
   function toggle(row: number) {
@@ -140,12 +143,22 @@ export function CatalogManager({
   }
 
   async function handleStep4(row: number, enabled: boolean) {
+    // La casella viene aggiornata SUBITO (poi confermata dal server): evita
+    // che la spunta "sparisca e ricompaia" durante il salvataggio.
+    setStep4Values((prev) => ({ ...prev, [row]: enabled }));
     setStep4Busy(row);
     startTransition(async () => {
       const res = await saveStep4Action(row, enabled);
       setStep4Busy(null);
-      if (res.error) setMessage({ type: "err", text: res.error });
-      else {
+      if (res.error) {
+        // Errore: si torna al valore mostrato dal server.
+        setStep4Values((prev) => {
+          const next = { ...prev };
+          delete next[row];
+          return next;
+        });
+        setMessage({ type: "err", text: res.error });
+      } else {
         setMessage({
           type: "ok",
           text: enabled ? "Multiplo di 4 attivo." : "Multiplo di 4 disattivato.",
@@ -171,6 +184,8 @@ export function CatalogManager({
           text: `"Multiplo di 4" ${enabled ? "attivato" : "disattivato"} su ${res.applied} articoli.`,
         });
         setSelected(new Set());
+        // Il valore arriva ora dal server (lettura fresca della pagina).
+        setStep4Values({});
         router.refresh();
       }
     });
@@ -192,6 +207,8 @@ export function CatalogManager({
           text: `Multiplo di 4 eliminato su ${res.applied} articoli.`,
         });
         setSelected(new Set());
+        // Il valore arriva ora dal server (lettura fresca della pagina).
+        setStep4Values({});
         router.refresh();
       }
     });
@@ -379,7 +396,7 @@ export function CatalogManager({
                     <input
                       className="step4-check"
                       type="checkbox"
-                      checked={item.step4}
+                      checked={step4Values[item.row] ?? item.step4}
                       onChange={(e) => handleStep4(item.row, e.target.checked)}
                       disabled={!canEdit || step4Busy === item.row}
                       aria-label={`Multiplo di 4 ${item.codice}`}

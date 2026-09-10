@@ -10,7 +10,10 @@ export default async function CatalogoPage() {
   const admin = await getCurrentAdmin();
   if (!admin) redirect("/login");
 
-  const items = await readCatalog();
+  // Lettura "fresh": la pagina Catalogo dell'amministratore deve mostrare
+  // sempre l'ultimo stato salvato (spunte "multiplo di 4", sconti, prezzi),
+  // anche subito dopo un salvataggio.
+  const items = await readCatalog({ fresh: true });
   const canEdit = !admin.subAdmin;
 
   return (

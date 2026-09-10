@@ -56,27 +56,51 @@ const ROOT_TEMPLATE = appRootPath("ordine_template.xlsx");
 const STEP4_FILE = appDataPath("catalog-step4.json");
 const STEP4_SETTING_KEY = "catalog_step4";
 
-async function readStep4Overrides(): Promise<Record<number, boolean>> {
-  return memoized<Record<number, boolean>>(
+/**
+ * Legge gli override "multiplo di 4" dell'amministratore.
+ * Ritorna SEMPRE una copia dell'oggetto: il valore in cache non deve mai
+ * essere modificato (altrimenti un salvataggio potrebbe alterare i dati già
+ * letti da altre richieste).
+ * Con { fresh: true } salta la cache: si legge sempre l'ultimo stato salvato.
+ */
+async function readStep4Overrides(opts?: {
+  fresh?: boolean;
+}): Promise<Record<number, boolean>> {
+  const load = async (): Promise<Record<number, boolean>> => {
+    // 1) Supabase (online). Lettura diretta (fresh): il valore può essere
+    //    appena stato cambiato da un'altra istanza Vercel.
+    const remote = await getAppSetting<Record<number, boolean>>(
+      STEP4_SETTING_KEY,
+      { fresh: true }
+    );
+    if (remote && typeof remote === "object") return { ...remote };
+    // 2) File locale.
+    try {
+      return JSON.parse(
+        await fs.readFile(STEP4_FILE, "utf8")
+      ) as Record<number, boolean>;
+    } catch {
+      return {};
+    }
+  };
+
+  if (opts?.fresh) return load();
+
+  const cached = await memoized<Record<number, boolean>>(
     CATALOG_STEP4_CACHE_KEY,
     CATALOG_CACHE_TTL_MS,
-    async () => {
-      // 1) Supabase (online).
-      const remote = await getAppSetting<Record<number, boolean>>(
-        STEP4_SETTING_KEY
-      );
-      if (remote && typeof remote === "object") return remote;
-      // 2) File locale.
-      try {
-        return JSON.parse(
-          await fs.readFile(STEP4_FILE, "utf8")
-        ) as Record<number, boolean>;
-      } catch {
-        return {};
-      }
-    }
+    load
   );
+  return { ...cached };
 }
+
+/**
+ * I salvataggi del vincolo "multiplo di 4" vengono messi in coda: cliccando in
+ * fretta le caselle di più articoli partono più richieste in parallelo e, senza
+ * accodamento, il classico "leggi -> modifica -> scrivi" faceva perdere le
+ * modifiche precedenti (le spunte tornavano indietro).
+ */
+let step4WriteQueue: Promise<void> = Promise.resolve();
 
 /**
  * Imposta (o revoca) il vincolo "quantita' a multipli di 4" per gli articoli
@@ -87,17 +111,25 @@ export async function saveStep4(
   updates: { row: number; enabled: boolean }[]
 ): Promise<void> {
   if (updates.length === 0) return;
-  const overrides = await readStep4Overrides();
-  for (const u of updates) {
-    overrides[u.row] = u.enabled;
-  }
-  const saved = await setAppSetting(STEP4_SETTING_KEY, overrides);
-  if (!saved) {
-    await fs.mkdir(path.dirname(STEP4_FILE), { recursive: true });
-    await fs.writeFile(STEP4_FILE, JSON.stringify(overrides, null, 2));
-  }
-  // Gli override sono cambiati: il catalogo (che li applica) va ricalcolato.
-  invalidateCatalogCache();
+
+  const run = step4WriteQueue.catch(() => {}).then(async () => {
+    // Lettura FRESH: si parte dall'ultimo stato salvato, così le modifiche
+    // fatte poco prima su altri articoli non vengono sovrascritte.
+    const overrides = await readStep4Overrides({ fresh: true });
+    for (const u of updates) {
+      overrides[u.row] = u.enabled;
+    }
+    const saved = await setAppSetting(STEP4_SETTING_KEY, overrides);
+    if (!saved) {
+      await fs.mkdir(path.dirname(STEP4_FILE), { recursive: true });
+      await fs.writeFile(STEP4_FILE, JSON.stringify(overrides, null, 2));
+    }
+    // Gli override sono cambiati: il catalogo (che li applica) va ricalcolato.
+    invalidateCatalogCache();
+  });
+
+  step4WriteQueue = run.catch(() => {});
+  return run;
 }
 
 function templateFile(): string {
@@ -171,54 +203,67 @@ function findHeaderIndex(rows: unknown[][]): number {
   return -1;
 }
 
-export async function readCatalog(): Promise<CatalogItem[]> {
+/**
+ * Legge il catalogo applicando gli override "multiplo di 4".
+ * `step4Fresh`: TRUE forza la rilettura degli override (usato per la pagina
+ * Catalogo dell'amministratore, così lo stato mostrato è sempre aggiornato).
+ */
+async function buildCatalog(step4Fresh: boolean): Promise<CatalogItem[]> {
+  const workbook = await openWorkbook().catch(() => null);
+  if (!workbook) return [];
+  const { startRow, rows } = readSheet(workbook);
+  const headerIdx = findHeaderIndex(rows);
+  if (headerIdx === -1) return [];
+
+  const items: CatalogItem[] = [];
+  const step4Overrides = await readStep4Overrides({ fresh: step4Fresh });
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i] ?? [];
+    const codice = String(row[3] ?? "").trim();
+    const descrizione = String(row[4] ?? "").trim();
+    if (!codice && !descrizione) break;
+    const prezzo = toNumber(row[8]);
+    const sconto = toNumber(row[12]);
+    const itemRow = startRow + i;
+    items.push({
+      row: itemRow,
+      brand: String(row[0] ?? "").trim(),
+      tipologia: String(row[1] ?? "").trim(),
+      modello: String(row[2] ?? "").trim(),
+      codice,
+      descrizione,
+      diottria: String(row[5] ?? "").trim(),
+      pezzi: toNumber(row[6]),
+      prezzo,
+      iva: parseIvaPerc(row[9]),
+      sconto,
+      // NETTO IVA ESCL. come da formula del template (N = I*(1-M)):
+      // NON si legge dal file perche' per molti articoli la cella e' vuota.
+      nettoEscl: round2(prezzo * (1 - sconto)),
+      // Multiplo di 4: decide l'amministratore (override); altrimenti regola
+      // automatica per descrizione (tutto tranne expo/kit/astucci).
+      step4:
+        step4Overrides[itemRow] !== undefined
+          ? step4Overrides[itemRow]
+          : !/(expo|kit|astuccio)/i.test(descrizione),
+    });
+  }
+  return items;
+}
+
+export async function readCatalog(opts?: {
+  /** TRUE per ignorare la cache (usato dalla pagina Catalogo dell'admin). */
+  fresh?: boolean;
+}): Promise<CatalogItem[]> {
+  // Lettura diretta: sempre aggiornata (dopo un salvataggio dell'admin).
+  if (opts?.fresh) return buildCatalog(true);
+
   // Risultato condiviso tra richieste simultanee (stessa istanza) per TTL.
   // Attenzione: i chiamanti NON devono mutare gli oggetti dell'array.
   return memoized<CatalogItem[]>(
     CATALOG_ITEMS_CACHE_KEY,
     CATALOG_CACHE_TTL_MS,
-    async () => {
-      const workbook = await openWorkbook().catch(() => null);
-      if (!workbook) return [];
-      const { startRow, rows } = readSheet(workbook);
-      const headerIdx = findHeaderIndex(rows);
-      if (headerIdx === -1) return [];
-
-      const items: CatalogItem[] = [];
-      const step4Overrides = await readStep4Overrides();
-      for (let i = headerIdx + 1; i < rows.length; i++) {
-        const row = rows[i] ?? [];
-        const codice = String(row[3] ?? "").trim();
-        const descrizione = String(row[4] ?? "").trim();
-        if (!codice && !descrizione) break;
-        const prezzo = toNumber(row[8]);
-        const sconto = toNumber(row[12]);
-        const itemRow = startRow + i;
-        items.push({
-          row: itemRow,
-          brand: String(row[0] ?? "").trim(),
-          tipologia: String(row[1] ?? "").trim(),
-          modello: String(row[2] ?? "").trim(),
-          codice,
-          descrizione,
-          diottria: String(row[5] ?? "").trim(),
-          pezzi: toNumber(row[6]),
-          prezzo,
-          iva: parseIvaPerc(row[9]),
-          sconto,
-          // NETTO IVA ESCL. come da formula del template (N = I*(1-M)):
-          // NON si legge dal file perche' per molti articoli la cella e' vuota.
-          nettoEscl: round2(prezzo * (1 - sconto)),
-          // Multiplo di 4: decide l'amministratore (override); altrimenti regola
-          // automatica per descrizione (tutto tranne expo/kit/astucci).
-          step4:
-            step4Overrides[itemRow] !== undefined
-              ? step4Overrides[itemRow]
-              : !/(expo|kit|astuccio)/i.test(descrizione),
-        });
-      }
-      return items;
-    }
+    () => buildCatalog(false)
   );
 }
 
