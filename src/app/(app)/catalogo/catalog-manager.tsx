@@ -176,6 +176,27 @@ export function CatalogManager({
     });
   }
 
+  /** Rimuove il vincolo "multiplo di 4" su tutti gli articoli selezionati. */
+  async function handleRemoveStep4() {
+    const rows = [...selected];
+    if (rows.length === 0) {
+      setMessage({ type: "err", text: "Seleziona almeno un articolo." });
+      return;
+    }
+    startTransition(async () => {
+      const res = await applyBulkStep4Action(rows, false);
+      if (res.error) setMessage({ type: "err", text: res.error });
+      else {
+        setMessage({
+          type: "ok",
+          text: `Multiplo di 4 eliminato su ${res.applied} articoli.`,
+        });
+        setSelected(new Set());
+        router.refresh();
+      }
+    });
+  }
+
   return (
     <>
       {canEdit && (
@@ -248,7 +269,20 @@ export function CatalogManager({
           >
             {pending ? "Applicazione…" : "Applica multiplo di 4"}
           </button>
+          <button
+            className="danger-button table-button"
+            type="button"
+            onClick={handleRemoveStep4}
+            disabled={pending}
+            title="Toglie il vincolo 'multipli di 4' dagli articoli selezionati"
+          >
+            {pending ? "Applicazione…" : "Elimina multipli di 4"}
+          </button>
         </div>
+        <p className="settings-help">
+          &quot;Elimina multipli di 4&quot; toglie il vincolo dagli articoli
+          selezionati, lasciando la quantità libera.
+        </p>
         {message && (
           <p className={message.type === "ok" ? "form-note" : "form-error"} role="status">
             {message.text}
