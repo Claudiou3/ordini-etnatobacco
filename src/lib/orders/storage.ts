@@ -93,9 +93,6 @@ export async function uploadWorkingTemplate(buffer: Buffer): Promise<boolean> {
     buffer,
     {
       contentType: XLSX_CONTENT_TYPE,
-      // Niente cache CDN: il template di lavoro viene sovrascritto (sconti,
-      // prezzi, nuovi articoli) e la modifica deve essere visibile subito.
-      cacheControl: "0",
       upsert: true,
     }
   );
