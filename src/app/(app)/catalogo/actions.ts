@@ -109,18 +109,19 @@ export async function applyBulkDiscountAction(
   return { success: true, applied: validRows.length };
 }
 
-/** Imposta/revoca il vincolo "multiplo di 4" su un singolo articolo. */
+/** Imposta/revoca il vincolo "multiplo di 4" su un singolo articolo (per CODICE). */
 export async function saveStep4Action(
-  row: number,
+  codice: string,
   enabled: boolean
 ): Promise<CatalogActionState> {
   const admin = await getCurrentAdmin();
   if (!admin || admin.subAdmin)
     return { error: "Operazione riservata all'amministratore." };
-  if (!Number.isInteger(row) || row <= 0) return { error: "Articolo non valido." };
+  const code = typeof codice === "string" ? codice.trim() : "";
+  if (!code) return { error: "Articolo non valido." };
 
   try {
-    await saveStep4([{ row, enabled }]);
+    await saveStep4([{ codice: code, enabled: !!enabled }]);
   } catch (err) {
     return { error: "Errore salvataggio: " + (err as Error).message };
   }
@@ -128,24 +129,33 @@ export async function saveStep4Action(
   return { success: true };
 }
 
-/** Applica il vincolo "multiplo di 4" alla selezione di articoli. */
+/** Applica il vincolo "multiplo di 4" alla selezione di articoli (per CODICE). */
 export async function applyBulkStep4Action(
-  rows: number[],
+  codici: string[],
   enabled: boolean
 ): Promise<CatalogActionState> {
   const admin = await getCurrentAdmin();
   if (!admin || admin.subAdmin)
     return { error: "Operazione riservata all'amministratore." };
-  const validRows = rows.filter((r) => Number.isInteger(r) && r > 0);
-  if (validRows.length === 0) return { error: "Seleziona almeno un articolo." };
+  const validCodici = Array.from(
+    new Set(
+      (codici ?? [])
+        .map((c) => String(c ?? "").trim())
+        .filter((c) => c.length > 0)
+    )
+  );
+  if (validCodici.length === 0)
+    return { error: "Seleziona almeno un articolo." };
 
   try {
-    await saveStep4(validRows.map((row) => ({ row, enabled })));
+    await saveStep4(
+      validCodici.map((codice) => ({ codice, enabled: !!enabled }))
+    );
   } catch (err) {
     return { error: "Errore salvataggio: " + (err as Error).message };
   }
   revalidatePath("/catalogo");
-  return { success: true, applied: validRows.length };
+  return { success: true, applied: validCodici.length };
 }
 
 export type TemplateUploadState = {

@@ -52,46 +52,123 @@ export type CatalogItem = {
 
 const WORKING_FILE = appDataPath("ordine_template.xlsx");
 const ROOT_TEMPLATE = appRootPath("ordine_template.xlsx");
-// Override dell'amministratore sul "multiplo di 4" per singolo articolo (riga).
-const STEP4_FILE = appDataPath("catalog-step4.json");
-const STEP4_SETTING_KEY = "catalog_step4";
 
 /**
- * Legge gli override "multiplo di 4" dell'amministratore.
- * Ritorna SEMPRE una copia dell'oggetto: il valore in cache non deve mai
- * essere modificato (altrimenti un salvataggio potrebbe alterare i dati già
- * letti da altre richieste).
- * Con { fresh: true } salta la cache: si legge sempre l'ultimo stato salvato.
+ * Override dell'amministratore sul "multiplo di 4", AGGANCIATI AL CODICE
+ * ARTICOLO (non più alla riga): inserire/eliminare/spostare righe nel template
+ * non li sfalsa più. I vecchi override salvati per riga vengono convertiti
+ * automaticamente UNA volta al primo avvio (vedi ensureStep4Codes).
  */
-async function readStep4Overrides(opts?: {
+const STEP4_CODES_FILE = appDataPath("catalog-step4-codes.json");
+const STEP4_CODES_SETTING_KEY = "catalog_step4_codes";
+// Chiave/file LEGACY (per riga): servono solo alla migrazione una-tantum.
+const STEP4_LEGACY_FILE = appDataPath("catalog-step4.json");
+const STEP4_LEGACY_SETTING_KEY = "catalog_step4";
+
+/** Override "multiplo di 4": codice articolo -> enabled. */
+type Step4Overrides = Record<string, boolean>;
+
+/** Legge gli override LEGACY (chiave = numero di riga). Solo per la migrazione. */
+async function loadLegacyRowOverrides(): Promise<Record<number, boolean>> {
+  const remote = await getAppSetting<Record<number, boolean>>(
+    STEP4_LEGACY_SETTING_KEY,
+    { fresh: true }
+  );
+  if (remote && typeof remote === "object") return { ...remote };
+  try {
+    return JSON.parse(
+      await fs.readFile(STEP4_LEGACY_FILE, "utf8")
+    ) as Record<number, boolean>;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Legge gli override per CODICE: Supabase (online), altrimenti file locale.
+ * Ritorna null se non esistono ancora (primo avvio dopo l'aggiornamento).
+ */
+async function loadStep4Codes(): Promise<Step4Overrides | null> {
+  const remote = await getAppSetting<Step4Overrides>(
+    STEP4_CODES_SETTING_KEY,
+    { fresh: true }
+  );
+  if (remote && typeof remote === "object") return { ...remote };
+  try {
+    const raw = JSON.parse(
+      await fs.readFile(STEP4_CODES_FILE, "utf8")
+    ) as Step4Overrides;
+    if (raw && typeof raw === "object") return raw;
+  } catch {
+    // file non ancora presente
+  }
+  return null;
+}
+
+/**
+ * Legge gli override "multiplo di 4" per CODICE.
+ * Ritorna SEMPRE una copia; con { fresh: true } salta la cache.
+ */
+async function readStep4Codes(opts?: {
   fresh?: boolean;
-}): Promise<Record<number, boolean>> {
-  const load = async (): Promise<Record<number, boolean>> => {
-    // 1) Supabase (online). Lettura diretta (fresh): il valore può essere
-    //    appena stato cambiato da un'altra istanza Vercel.
-    const remote = await getAppSetting<Record<number, boolean>>(
-      STEP4_SETTING_KEY,
-      { fresh: true }
-    );
-    if (remote && typeof remote === "object") return { ...remote };
-    // 2) File locale.
-    try {
-      return JSON.parse(
-        await fs.readFile(STEP4_FILE, "utf8")
-      ) as Record<number, boolean>;
-    } catch {
-      return {};
-    }
-  };
-
-  if (opts?.fresh) return load();
-
-  const cached = await memoized<Record<number, boolean>>(
+}): Promise<Step4Overrides | null> {
+  if (opts?.fresh) return loadStep4Codes();
+  return memoized<Step4Overrides | null>(
     CATALOG_STEP4_CACHE_KEY,
     CATALOG_CACHE_TTL_MS,
-    load
+    loadStep4Codes
   );
-  return { ...cached };
+}
+
+/** Salva gli override "multiplo di 4" (Supabase oppure file locale). */
+async function persistStep4Codes(codes: Step4Overrides): Promise<void> {
+  const saved = await setAppSetting(STEP4_CODES_SETTING_KEY, codes);
+  if (!saved) {
+    await fs.mkdir(path.dirname(STEP4_CODES_FILE), { recursive: true });
+    await fs.writeFile(STEP4_CODES_FILE, JSON.stringify(codes, null, 2));
+  }
+  invalidateMemo(CATALOG_STEP4_CACHE_KEY);
+}
+
+/** Mappa riga->codice letta dal template corrente (per la migrazione legacy). */
+async function rowToCodiceMapFromSheet(): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+  const workbook = await openWorkbook().catch(() => null);
+  if (!workbook) return map;
+  const { startRow, rows } = readSheet(workbook);
+  const headerIdx = findHeaderIndex(rows);
+  if (headerIdx === -1) return map;
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i] ?? [];
+    const codice = String(row[3] ?? "").trim();
+    const descrizione = String(row[4] ?? "").trim();
+    if (!codice && !descrizione) break;
+    if (codice) map.set(startRow + i, codice);
+  }
+  return map;
+}
+
+/**
+ * Ritorna gli override per CODICE. Se non esistono ancora, converte UNA volta
+ * i vecchi override per riga (legacy) in override per codice, usando il
+ * template corrente, poi li salva con la nuova chiave.
+ */
+async function ensureStep4Codes(opts: {
+  fresh: boolean;
+  rowMap?: Map<number, string>;
+}): Promise<Step4Overrides> {
+  const existing = await readStep4Codes({ fresh: opts.fresh });
+  if (existing !== null) return existing;
+
+  const rowMap = opts.rowMap ?? (await rowToCodiceMapFromSheet());
+  const legacy = await loadLegacyRowOverrides();
+  const codes: Step4Overrides = {};
+  for (const [rowKey, value] of Object.entries(legacy)) {
+    const codice = rowMap.get(Number(rowKey));
+    if (codice) codes[codice] = value === true;
+  }
+  await persistStep4Codes(codes);
+  return codes;
 }
 
 /**
@@ -104,26 +181,25 @@ let step4WriteQueue: Promise<void> = Promise.resolve();
 
 /**
  * Imposta (o revoca) il vincolo "quantita' a multipli di 4" per gli articoli
- * indicati. La decisione dell'amministratore ha la precedenza sulla regola
- * automatica per descrizione.
+ * indicati (PER CODICE). La decisione dell'amministratore ha la precedenza
+ * sulla regola automatica per descrizione.
  */
 export async function saveStep4(
-  updates: { row: number; enabled: boolean }[]
+  updates: { codice: string; enabled: boolean }[]
 ): Promise<void> {
-  if (updates.length === 0) return;
+  const valid = updates.filter(
+    (u) => typeof u.codice === "string" && u.codice.trim().length > 0
+  );
+  if (valid.length === 0) return;
 
   const run = step4WriteQueue.catch(() => {}).then(async () => {
     // Lettura FRESH: si parte dall'ultimo stato salvato, così le modifiche
     // fatte poco prima su altri articoli non vengono sovrascritte.
-    const overrides = await readStep4Overrides({ fresh: true });
-    for (const u of updates) {
-      overrides[u.row] = u.enabled;
+    const overrides = await ensureStep4Codes({ fresh: true });
+    for (const u of valid) {
+      overrides[u.codice.trim()] = u.enabled;
     }
-    const saved = await setAppSetting(STEP4_SETTING_KEY, overrides);
-    if (!saved) {
-      await fs.mkdir(path.dirname(STEP4_FILE), { recursive: true });
-      await fs.writeFile(STEP4_FILE, JSON.stringify(overrides, null, 2));
-    }
+    await persistStep4Codes(overrides);
     // Gli override sono cambiati: il catalogo (che li applica) va ricalcolato.
     invalidateCatalogCache();
   });
@@ -215,8 +291,22 @@ async function buildCatalog(step4Fresh: boolean): Promise<CatalogItem[]> {
   const headerIdx = findHeaderIndex(rows);
   if (headerIdx === -1) return [];
 
+  // Pre-pass: mappa riga -> codice. Serve sia per agganciare gli override al
+  // CODICE, sia per convertire una volta i vecchi override salvati per riga.
+  const rowToCodice = new Map<number, string>();
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i] ?? [];
+    const codice = String(row[3] ?? "").trim();
+    const descrizione = String(row[4] ?? "").trim();
+    if (!codice && !descrizione) break;
+    if (codice) rowToCodice.set(startRow + i, codice);
+  }
+  const step4Overrides = await ensureStep4Codes({
+    fresh: step4Fresh,
+    rowMap: rowToCodice,
+  });
+
   const items: CatalogItem[] = [];
-  const step4Overrides = await readStep4Overrides({ fresh: step4Fresh });
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i] ?? [];
     const codice = String(row[3] ?? "").trim();
@@ -240,11 +330,12 @@ async function buildCatalog(step4Fresh: boolean): Promise<CatalogItem[]> {
       // NETTO IVA ESCL. come da formula del template (N = I*(1-M)):
       // NON si legge dal file perche' per molti articoli la cella e' vuota.
       nettoEscl: round2(prezzo * (1 - sconto)),
-      // Multiplo di 4: decide l'amministratore (override); altrimenti regola
-      // automatica per descrizione (tutto tranne expo/kit/astucci).
+      // Multiplo di 4: decide l'amministratore (override PER CODICE);
+      // altrimenti regola automatica per descrizione (tutto tranne
+      // expo/kit/astucci). Se l'articolo non ha codice si usa la regola.
       step4:
-        step4Overrides[itemRow] !== undefined
-          ? step4Overrides[itemRow]
+        codice && step4Overrides[codice] !== undefined
+          ? step4Overrides[codice]
           : !/(expo|kit|astuccio)/i.test(descrizione),
     });
   }

@@ -29,11 +29,11 @@ export function CatalogManager({
   const [baseValues, setBaseValues] = useState<Record<number, string>>({});
   const [message, setMessage] = useState<Msg>(null);
   const [pending, startTransition] = useTransition();
-  const [step4Busy, setStep4Busy] = useState<number | null>(null);
+  const [step4Busy, setStep4Busy] = useState<string | null>(null);
   const [bulkStep4, setBulkStep4] = useState("si");
   // Valore immediato delle caselle "multiplo di 4" (aggiornamento ottimistico:
   // la spunta non deve "saltare" in attesa della risposta del server).
-  const [step4Values, setStep4Values] = useState<Record<number, boolean>>({});
+  const [step4Values, setStep4Values] = useState<Record<string, boolean>>({});
   const router = useRouter();
 
   function toggle(row: number) {
@@ -142,19 +142,19 @@ export function CatalogManager({
     });
   }
 
-  async function handleStep4(row: number, enabled: boolean) {
+  async function handleStep4(codice: string, enabled: boolean) {
     // La casella viene aggiornata SUBITO (poi confermata dal server): evita
     // che la spunta "sparisca e ricompaia" durante il salvataggio.
-    setStep4Values((prev) => ({ ...prev, [row]: enabled }));
-    setStep4Busy(row);
+    setStep4Values((prev) => ({ ...prev, [codice]: enabled }));
+    setStep4Busy(codice);
     startTransition(async () => {
-      const res = await saveStep4Action(row, enabled);
+      const res = await saveStep4Action(codice, enabled);
       setStep4Busy(null);
       if (res.error) {
         // Errore: si torna al valore mostrato dal server.
         setStep4Values((prev) => {
           const next = { ...prev };
-          delete next[row];
+          delete next[codice];
           return next;
         });
         setMessage({ type: "err", text: res.error });
@@ -169,14 +169,16 @@ export function CatalogManager({
   }
 
   async function handleBulkStep4() {
-    const rows = [...selected];
-    if (rows.length === 0) {
+    const codici = items
+      .filter((i) => selected.has(i.row) && i.codice)
+      .map((i) => i.codice);
+    if (codici.length === 0) {
       setMessage({ type: "err", text: "Seleziona almeno un articolo." });
       return;
     }
     const enabled = bulkStep4 === "si";
     startTransition(async () => {
-      const res = await applyBulkStep4Action(rows, enabled);
+      const res = await applyBulkStep4Action(codici, enabled);
       if (res.error) setMessage({ type: "err", text: res.error });
       else {
         setMessage({
@@ -193,13 +195,15 @@ export function CatalogManager({
 
   /** Rimuove il vincolo "multiplo di 4" su tutti gli articoli selezionati. */
   async function handleRemoveStep4() {
-    const rows = [...selected];
-    if (rows.length === 0) {
+    const codici = items
+      .filter((i) => selected.has(i.row) && i.codice)
+      .map((i) => i.codice);
+    if (codici.length === 0) {
       setMessage({ type: "err", text: "Seleziona almeno un articolo." });
       return;
     }
     startTransition(async () => {
-      const res = await applyBulkStep4Action(rows, false);
+      const res = await applyBulkStep4Action(codici, false);
       if (res.error) setMessage({ type: "err", text: res.error });
       else {
         setMessage({
@@ -396,9 +400,9 @@ export function CatalogManager({
                     <input
                       className="step4-check"
                       type="checkbox"
-                      checked={step4Values[item.row] ?? item.step4}
-                      onChange={(e) => handleStep4(item.row, e.target.checked)}
-                      disabled={!canEdit || step4Busy === item.row}
+                      checked={step4Values[item.codice] ?? item.step4}
+                      onChange={(e) => handleStep4(item.codice, e.target.checked)}
+                      disabled={!canEdit || step4Busy === item.codice}
                       aria-label={`Multiplo di 4 ${item.codice}`}
                       title="Quantità a multipli di 4"
                     />
