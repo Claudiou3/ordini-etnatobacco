@@ -431,6 +431,15 @@ h2 { font-size: 21px; }
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+/* Campi anagrafici non modificabili dall'agente (Nuovo ordine): restano
+   leggibili ma non editabili, cosi' i dati del cliente non vengono alterati. */
+.form-input.is-locked {
+  background: #f1f5f9; color: #475569; border-color: #e2e8f0; cursor: not-allowed;
+}
+.form-input.is-locked:focus { border-color: #e2e8f0; box-shadow: none; }
+.form-lock-note {
+  font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em;
+}
 .password-field { position: relative; display: block; }
 .password-field .form-input { padding-right: 42px; }
 .password-toggle {

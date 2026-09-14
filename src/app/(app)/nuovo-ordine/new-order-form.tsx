@@ -38,6 +38,30 @@ const PAYMENT_OPTIONS = [
   "BONIFICO ANTICIPATO",
 ] as const;
 
+/**
+ * Campi dell'anagrafica che l'agente NON puo' modificare: vengono compilati
+ * automaticamente dal cliente richiamato con la ricerca (Passo 1).
+ * Tutti gli altri campi, tranne "Note", sono obbligatori per inviare.
+ */
+const LOCKED_FIELDS = [
+  "ragione_sociale",
+  "indirizzo",
+  "cap",
+  "citta",
+  "provincia",
+  "partita_iva",
+  "codice_fiscale",
+  "sdi",
+] as const;
+
+/** true se il campo arriva dall'anagrafica e non e' modificabile. */
+const isLockedField = (name: string): boolean =>
+  (LOCKED_FIELDS as readonly string[]).includes(name);
+
+/** Classi dell'input: i campi bloccati hanno lo sfondo grigio (sola lettura). */
+const inputClass = (name: string): string =>
+  `form-input${isLockedField(name) ? " is-locked" : ""}`;
+
 export function NewOrderForm({
   groups,
   giftArticles,
@@ -108,23 +132,63 @@ export function NewOrderForm({
     text: string;
   } | null>(null);
 
+  /**
+   * Campi obbligatori per l'invio (tutti tranne "Note"): ragione sociale,
+   * indirizzo, CAP, città di consegna, provincia, SDI e almeno uno tra P.IVA
+   * e codice fiscale; cellulare, email, pagamento e data devono essere
+   * valorizzati. Per i campi marcati "obbligatorioDaAnagrafica" l'agente non
+   * puo' scrivere: se sono vuoti li deve completare l'amministratore.
+   */
+  function missingFields(): { label: string; obbligatorioDaAnagrafica: boolean }[] {
+    const mancanti: { label: string; obbligatorioDaAnagrafica: boolean }[] = [];
+    const vuoto = (v: string) => v.trim().length === 0;
+    if (vuoto(fields.ragione_sociale)) {
+      mancanti.push({ label: "Ragione sociale", obbligatorioDaAnagrafica: true });
+    }
+    if (vuoto(fields.indirizzo)) {
+      mancanti.push({ label: "Indirizzo di consegna", obbligatorioDaAnagrafica: true });
+    }
+    if (vuoto(fields.cap)) {
+      mancanti.push({ label: "CAP", obbligatorioDaAnagrafica: true });
+    }
+    if (vuoto(fields.citta)) {
+      mancanti.push({ label: "Città di consegna", obbligatorioDaAnagrafica: true });
+    }
+    if (vuoto(fields.provincia)) {
+      mancanti.push({ label: "Provincia", obbligatorioDaAnagrafica: true });
+    }
+    if (vuoto(fields.partita_iva) && vuoto(fields.codice_fiscale)) {
+      mancanti.push({
+        label: "P.IVA oppure codice fiscale",
+        obbligatorioDaAnagrafica: true,
+      });
+    }
+    if (vuoto(fields.sdi)) {
+      mancanti.push({ label: "SDI", obbligatorioDaAnagrafica: true });
+    }
+    if (vuoto(fields.cellulare)) {
+      mancanti.push({ label: "Cellulare", obbligatorioDaAnagrafica: false });
+    }
+    if (vuoto(fields.email)) {
+      mancanti.push({ label: "Email", obbligatorioDaAnagrafica: false });
+    }
+    if (vuoto(fields.pagamento)) {
+      mancanti.push({ label: "Pagamento", obbligatorioDaAnagrafica: false });
+    }
+    if (vuoto(dataOrdine)) {
+      mancanti.push({ label: "Data ordine", obbligatorioDaAnagrafica: false });
+    }
+    return mancanti;
+  }
+
   function canSubmit(): boolean {
     const hasItems = selectedLines.length > 0;
     const hasGifts = giftLines.length > 0 && giftLinesValid && giftTotalValid;
     const step4Ok = selectedLines.every(
       (line) => !line.step4 || isMultipleOf4(line.qty)
     );
-    const identityOk =
-      fields.partita_iva.trim().length > 0 || fields.codice_fiscale.trim().length > 0;
-    const addressOk =
-      fields.indirizzo.trim().length > 0 &&
-      fields.cap.trim().length > 0 &&
-      fields.citta.trim().length > 0 &&
-      fields.provincia.trim().length > 0;
     return (
-      fields.ragione_sociale.trim().length > 0 &&
-      identityOk &&
-      addressOk &&
+      missingFields().length === 0 &&
       (hasItems || hasGifts) &&
       step4Ok &&
       !sending
@@ -134,21 +198,23 @@ export function NewOrderForm({
   /** Elenca i motivi che impediscono l'invio (per un messaggio chiaro). */
   function buildValidationReasons(): string[] {
     const reasons: string[] = [];
-    if (fields.ragione_sociale.trim().length === 0) {
-      reasons.push("la ragione sociale");
+    if (!selected) {
+      reasons.push("seleziona il cliente con la ricerca (Passo 1)");
     }
-    const identityOk =
-      fields.partita_iva.trim().length > 0 || fields.codice_fiscale.trim().length > 0;
-    if (!identityOk) {
-      reasons.push("la P.IVA o il codice fiscale");
-    }
-    const addressOk =
-      fields.indirizzo.trim().length > 0 &&
-      fields.cap.trim().length > 0 &&
-      fields.citta.trim().length > 0 &&
-      fields.provincia.trim().length > 0;
-    if (!addressOk) {
-      reasons.push("indirizzo, CAP, città e provincia del cliente");
+    const mancanti = missingFields();
+    if (mancanti.length > 0) {
+      reasons.push(
+        "compila tutti i campi obbligatori, manca: " +
+          mancanti.map((m) => m.label).join(", ")
+      );
+      const daAnagrafica = mancanti.filter((m) => m.obbligatorioDaAnagrafica);
+      if (daAnagrafica.length > 0) {
+        reasons.push(
+          "i dati dell'anagrafica non modificabili dall'agente (" +
+            daAnagrafica.map((m) => m.label).join(", ") +
+            ") vanno completati dall'amministratore nella sezione Clienti"
+        );
+      }
     }
     const hasItems = selectedLines.length > 0;
     const hasGifts = giftLines.length > 0 && giftLinesValid && giftTotalValid;
@@ -591,17 +657,20 @@ export function NewOrderForm({
           )}
           {open && results.length === 0 && !loading && (
             <p className="search-empty">
-              Nessun cliente trovato. Puoi compilare i dati a mano qui sotto:
-              verrà inserito nell&apos;anagrafica al salvataggio.
+              Nessun cliente trovato. I dati anagrafici si compilano solo dalla
+              sezione <strong>Clienti</strong> (voce &quot;Inserisci un nuovo
+              cliente&quot;): inseriscilo lì e poi torna qui a cercarlo.
             </p>
           )}
         </div>
 
         {selected && (
           <p className="form-note" role="status">
-            Cliente selezionato: <strong>{selected.ragione_sociale}</strong>. La
-            città è stata inserita dall&apos;anagrafica (puoi modificarla come
-            città di consegna).
+            Cliente selezionato: <strong>{selected.ragione_sociale}</strong>. I
+            dati dell&apos;anagrafica (ragione sociale, indirizzo, CAP, città di
+            consegna, provincia, P.IVA, codice fiscale e SDI) sono in{" "}
+            <strong>sola lettura</strong>: vengono ripresi dal cliente e non si
+            possono modificare qui.
           </p>
         )}
       </section>
@@ -612,9 +681,14 @@ export function NewOrderForm({
             <p className="eyebrow">Passo 2 — Dati ordine</p>
             <h2>Intestazione ordine</h2>
             <p className="settings-help">
-              I campi si compilano dal cliente selezionato. La{" "}
-              <strong>Città</strong> è la città di <em>consegna</em>: non viene
-              precompilata (struttura del file Excel).
+              I campi si compilano dal cliente selezionato: ragione sociale,
+              indirizzo, CAP, città, provincia, P.IVA, codice fiscale e SDI sono{" "}
+              <strong>in sola lettura</strong> (non modificabili dall&apos;agente).
+              Sono <strong>obbligatori tutti i campi tranne Note</strong>{" "}
+              (per l&apos;identità fiscale basta la P.IVA <em>oppure</em> il
+              codice fiscale): l&apos;ordine si invia solo con tutto
+              valorizzato. La <strong>Città</strong> è la città di{" "}
+              <em>consegna</em> del cliente.
             </p>
           </div>
         </div>
@@ -623,46 +697,55 @@ export function NewOrderForm({
           <label className="form-field span-2">
             <span className="form-label">Ragione sociale cliente *</span>
             <input
-              className="form-input"
+              className={inputClass("ragione_sociale")}
               value={fields.ragione_sociale}
-              onChange={(e) => setField("ragione_sociale", e.target.value)}
+              readOnly
+              aria-readonly="true"
+              title="Dato dell'anagrafica cliente: non modificabile dall'agente"
             />
           </label>
 
           <label className="form-field span-2">
             <span className="form-label">Indirizzo di consegna</span>
             <input
-              className="form-input"
+              className={inputClass("indirizzo")}
               value={fields.indirizzo}
-              onChange={(e) => setField("indirizzo", e.target.value)}
+              readOnly
+              aria-readonly="true"
+              title="Dato dell'anagrafica cliente: non modificabile dall'agente"
             />
           </label>
 
           <label className="form-field">
             <span className="form-label">CAP</span>
             <input
-              className="form-input"
+              className={inputClass("cap")}
               value={fields.cap}
-              onChange={(e) => setField("cap", e.target.value)}
+              readOnly
+              aria-readonly="true"
+              title="Dato dell'anagrafica cliente: non modificabile dall'agente"
             />
           </label>
 
           <label className="form-field">
             <span className="form-label">Città di consegna *</span>
             <input
-              className="form-input"
+              className={inputClass("citta")}
               value={fields.citta}
-              onChange={(e) => setField("citta", e.target.value)}
-              placeholder="Scrivi la città di consegna"
+              readOnly
+              aria-readonly="true"
+              title="Città di consegna dall'anagrafica: non modificabile dall'agente"
             />
           </label>
 
           <label className="form-field">
             <span className="form-label">Provincia</span>
             <input
-              className="form-input"
+              className={inputClass("provincia")}
               value={fields.provincia}
-              onChange={(e) => setField("provincia", e.target.value)}
+              readOnly
+              aria-readonly="true"
+              title="Dato dell'anagrafica cliente: non modificabile dall'agente"
               maxLength={2}
             />
           </label>
@@ -680,27 +763,33 @@ export function NewOrderForm({
           <label className="form-field">
             <span className="form-label">P.IVA</span>
             <input
-              className="form-input"
+              className={inputClass("partita_iva")}
               value={fields.partita_iva}
-              onChange={(e) => setField("partita_iva", e.target.value)}
+              readOnly
+              aria-readonly="true"
+              title="Dato dell'anagrafica cliente: non modificabile dall'agente"
             />
           </label>
 
           <label className="form-field">
             <span className="form-label">Codice fiscale</span>
             <input
-              className="form-input"
+              className={inputClass("codice_fiscale")}
               value={fields.codice_fiscale}
-              onChange={(e) => setField("codice_fiscale", e.target.value)}
+              readOnly
+              aria-readonly="true"
+              title="Dato dell'anagrafica cliente: non modificabile dall'agente"
             />
           </label>
 
           <label className="form-field">
             <span className="form-label">SDI</span>
             <input
-              className="form-input"
+              className={inputClass("sdi")}
               value={fields.sdi}
-              onChange={(e) => setField("sdi", e.target.value)}
+              readOnly
+              aria-readonly="true"
+              title="Dato dell'anagrafica cliente: non modificabile dall'agente"
             />
           </label>
 
@@ -761,9 +850,11 @@ export function NewOrderForm({
                 : "Salva anagrafica aggiornata"}
             </button>
             <p className="settings-help">
-              Se hai compilato dati mancanti (telefono, email, indirizzo…), il
-              pulsante aggiorna la scheda del cliente: alle prossime ricerche
-              compariranno i dati corretti.
+              Aggiorna la scheda del cliente con i dati modificabili compilati
+              qui (cellulare ed email): alle prossime ricerche compariranno i
+              dati corretti. I dati anagrafici in sola lettura (ragione sociale,
+              indirizzo, CAP, città, provincia, P.IVA, codice fiscale, SDI) li
+              aggiorna l&apos;amministratore dalla sezione Clienti.
             </p>
           </div>
         )}

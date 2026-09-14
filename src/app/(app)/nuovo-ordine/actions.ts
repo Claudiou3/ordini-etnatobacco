@@ -404,18 +404,30 @@ export async function submitOrder(
   if (!ragioneSociale) {
     return { error: "Indica la ragione sociale del cliente." };
   }
-  // Campi obbligatori dell'anagrafica: ragione sociale + almeno uno tra
-  // P.IVA e codice fiscale (stessa regola dell'import anagrafica).
+  // Identita' fiscale: almeno uno tra P.IVA e codice fiscale (stessa regola
+  // dell'import anagrafica).
   if (!c.partita_iva.trim() && !c.codice_fiscale.trim()) {
     return {
       error:
         "Anagrafica cliente incompleta: inserisci la P.IVA o il codice fiscale.",
     };
   }
-  if (!c.indirizzo.trim() || !c.cap.trim() || !c.citta.trim() || !c.provincia.trim()) {
+  // Campi obbligatori (tutti tranne le note): l'ordine si invia solo con
+  // l'anagrafica completa.
+  const mancanti: string[] = [];
+  if (!c.indirizzo.trim()) mancanti.push("indirizzo");
+  if (!c.cap.trim()) mancanti.push("CAP");
+  if (!c.citta.trim()) mancanti.push("città di consegna");
+  if (!c.provincia.trim()) mancanti.push("provincia");
+  if (!c.sdi.trim()) mancanti.push("SDI");
+  if (!c.cellulare.trim()) mancanti.push("cellulare");
+  if (!c.email.trim()) mancanti.push("email");
+  if (mancanti.length > 0) {
     return {
       error:
-        "Anagrafica cliente incompleta: inserisci indirizzo, CAP, città e provincia.",
+        "Anagrafica cliente incompleta: da valorizzare " +
+        mancanti.join(", ") +
+        " prima di inviare l'ordine.",
     };
   }
   const dataOrdine = /^\d{4}-\d{2}-\d{2}$/.test(payload.data_ordine)
@@ -513,21 +525,68 @@ export async function submitOrder(
   const totale = round2(imponibile + iva + trasporto + ivaTrasporto);
 
   // Upsert anagrafica (file Excel di lavoro + store demo)
-  const partitaIva = c.partita_iva.trim();
-  const codiceFiscale = c.codice_fiscale.trim();
-  const existing = await findAnagraficaByKey(partitaIva, codiceFiscale);
+  const partitaIvaPayload = c.partita_iva.trim();
+  const codiceFiscalePayload = c.codice_fiscale.trim();
+  const existing = await findAnagraficaByKey(
+    partitaIvaPayload,
+    codiceFiscalePayload
+  );
+
+  /**
+   * Dati anagrafici in SOLA LETTURA per l'agente (ragione sociale, indirizzo,
+   * CAP, citta', provincia, P.IVA, codice fiscale, SDI): qui si rileggono dalla
+   * stessa fonte usata dalla ricerca clienti (Supabase) cosi' non possono
+   * essere alterati nemmeno inviando una richiesta modificata a mano. Se la
+   * fonte non e' disponibile restano i valori del modulo.
+   */
+  let fonte: {
+    ragione_sociale: string | null;
+    indirizzo: string | null;
+    cap: string | null;
+    citta: string | null;
+    provincia: string | null;
+    partita_iva: string | null;
+    codice_fiscale: string | null;
+    sdi: string | null;
+  } | null = null;
+  if (await isSupabaseConfigured()) {
+    const supabase = await getDataClient();
+    if (supabase) {
+      const conds: string[] = [];
+      if (partitaIvaPayload) conds.push(`partita_iva.eq.${partitaIvaPayload}`);
+      if (codiceFiscalePayload)
+        conds.push(`codice_fiscale.eq.${codiceFiscalePayload}`);
+      if (conds.length > 0) {
+        const { data } = await supabase
+          .from("customers")
+          .select(
+            "ragione_sociale, indirizzo, cap, citta, provincia, partita_iva, codice_fiscale, sdi"
+          )
+          .or(conds.join(","))
+          .limit(2);
+        if (data && data.length === 1) fonte = data[0];
+      }
+    }
+  }
+  /** Valore anagrafico bloccato: quello della fonte, altrimenti dal modulo. */
+  const bloccato = (dalModulo: string, dallaFonte?: string | null): string =>
+    (dallaFonte ?? "").trim() || dalModulo;
+
+  const partitaIva = bloccato(partitaIvaPayload, fonte?.partita_iva);
+  const codiceFiscale = bloccato(codiceFiscalePayload, fonte?.codice_fiscale);
+  const cittaConsegna = bloccato(c.citta.trim(), fonte?.citta);
 
   const anagraficaRecord = {
-    ragione_sociale: ragioneSociale,
-    indirizzo: c.indirizzo.trim(),
-    cap: c.cap.trim(),
+    ragione_sociale: bloccato(ragioneSociale, fonte?.ragione_sociale),
+    indirizzo: bloccato(c.indirizzo.trim(), fonte?.indirizzo),
+    cap: bloccato(c.cap.trim(), fonte?.cap),
     // la citta' del form e' quella di consegna: per i clienti gia' presenti
     // non si sovrascrive la citta' anagrafica; per i nuovi la si salva.
-    citta: existing ? "" : c.citta.trim(),
-    provincia: c.provincia.trim(),
+    citta: existing ? "" : cittaConsegna,
+    provincia: bloccato(c.provincia.trim(), fonte?.provincia),
     partita_iva: partitaIva,
     codice_fiscale: codiceFiscale,
-    sdi: c.sdi.trim(),
+    sdi: bloccato(c.sdi.trim(), fonte?.sdi),
     cellulare: c.cellulare.trim(),
     email: c.email.trim(),
   };
@@ -578,7 +637,7 @@ export async function submitOrder(
         ragione_sociale: ragioneSociale,
         indirizzo: anagraficaRecord.indirizzo,
         cap: anagraficaRecord.cap,
-        citta: c.citta.trim(),
+        citta: cittaConsegna,
         provincia: anagraficaRecord.provincia,
         partita_iva: partitaIva,
         codice_fiscale: codiceFiscale,
