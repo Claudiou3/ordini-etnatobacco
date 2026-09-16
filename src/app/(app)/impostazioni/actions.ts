@@ -23,6 +23,7 @@ import {
   saveShippingSettings,
   resetShippingSettings,
 } from "@/lib/shipping-settings";
+import { saveCustomerCopySettings } from "@/lib/customer-copy";
 import type { ShippingSettings } from "@/lib/shipping";
 
 export type SettingsActionState = { error?: string; success?: boolean; name?: string };
@@ -386,5 +387,36 @@ export async function resetShippingSettingsAction(
     excelWarning: result.excelWarning,
     settings: result.settings,
   };
+}
+
+export type CustomerCopyActionState = { error?: string; success?: boolean };
+
+/**
+ * Attiva/disattiva l'invio della copia dell'ordine al cliente (Impostazioni).
+ * Solo l'amministratore principale.
+ *
+ * - disattivata (predefinito): il modulo "Nuovo ordine" degli agenti resta
+ *   identico e nessuna copia viene inviata ai clienti;
+ * - attivata: al Passo 6 del modulo l'agente decide ordine per ordine.
+ * L'ordine ufficiale con il modulo Excel continua ad arrivare all'ufficio.
+ */
+export async function saveCustomerCopySettingsAction(
+  _prev: CustomerCopyActionState,
+  formData: FormData
+): Promise<CustomerCopyActionState> {
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+
+  const enabled = String(formData.get("enabled") ?? "") !== "";
+  const message = String(formData.get("message") ?? "").trim();
+
+  const result = await saveCustomerCopySettings({ enabled, message });
+  if (!result.ok) return { error: result.error };
+
+  revalidatePath("/impostazioni");
+  revalidatePath("/nuovo-ordine");
+  return { success: true };
 }
 

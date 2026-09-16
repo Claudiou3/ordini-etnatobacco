@@ -4,8 +4,10 @@ import { listSettingsStatus, getSetting } from "@/lib/settings/runtime";
 import { getEmailConfig } from "@/lib/email/config";
 import { getLogos } from "@/lib/logos";
 import { getShippingSettings } from "@/lib/shipping-settings";
+import { getCustomerCopySettings } from "@/lib/customer-copy";
 import { DEFAULT_ORDER_EMAIL } from "@/lib/email/send";
 import { SettingsForm } from "./settings-form";
+import { CustomerCopyForm } from "./customer-copy-form";
 import { EmailConfigForm } from "./email-config-form";
 import { ImportExcel } from "./import-excel";
 import { LogosForm } from "./logos-form";
@@ -26,11 +28,12 @@ export default async function ImpostazioniPage() {
   // alle Impostazioni (dove si effettuano le modifiche).
   if (admin.subAdmin) redirect("/console");
 
-  const [keys, emailConfig, logos, shipping] = await Promise.all([
+  const [keys, emailConfig, logos, shipping, customerCopy] = await Promise.all([
     listSettingsStatus(),
     getEmailConfig(),
     getLogos(),
     getShippingSettings(),
+    getCustomerCopySettings(),
   ]);
 
   const orderRecipient = (await getSetting("ORDER_EMAIL_TO")) || DEFAULT_ORDER_EMAIL;
@@ -66,6 +69,8 @@ export default async function ImpostazioniPage() {
       <SettingsForm keys={keys} />
 
       <EmailConfigForm config={emailConfig} />
+
+      <CustomerCopyForm settings={customerCopy} />
 
       <section className="content-panel">
         <TestEmailButton recipient={orderRecipient} />

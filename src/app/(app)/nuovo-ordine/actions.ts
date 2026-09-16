@@ -34,8 +34,15 @@ import {
   saveOrderWorkbook,
   sanitizeFileBase,
 } from "@/lib/orders/excel";
-import { sendOrderEmail } from "@/lib/email/send";
-import { isSupabaseConfigured } from "@/lib/settings/runtime";
+import { sendOrderEmail, DEFAULT_ORDER_EMAIL } from "@/lib/email/send";
+import { getEmailConfig } from "@/lib/email/config";
+import { getSetting, isSupabaseConfigured } from "@/lib/settings/runtime";
+import {
+  buildCustomerCopyEmail,
+  getCustomerCopySettings,
+  isValidEmailAddress,
+} from "@/lib/customer-copy";
+import { isValidOmaggioPaia, saveOrderOmaggio } from "@/lib/orders/omaggio";
 import { getDataClient } from "@/lib/supabase/data";
 import type { OrderDetail } from "@/lib/types";
 
@@ -225,6 +232,13 @@ export type SubmitOrderPayload = {
   items: { row: number; qty: number }[];
   /** Righe omaggio: totale complessivo massimo GIFT_MAX_QTY pezzi. */
   gift: { row: number; qty: number }[];
+  /** Paia di occhiali in omaggio (nuovo sistema "jolly", 1..GIFT_MAX_QTY):
+   *  salvate a parte per poterle mostrare nella stampa e nella copia inviata
+   *  al cliente (nel solo file Excel non sarebbero disponibili). */
+  omaggio_paia?: number;
+  /** Scelta dell'agente: inviare al cliente la copia dell'ordine (vale solo se
+   *  la funzione e' attivata dall'amministratore nelle Impostazioni). */
+  inviaCopiaCliente?: boolean;
 };
 
 export type SubmitOrderResult = {
@@ -235,6 +249,10 @@ export type SubmitOrderResult = {
   emailSent?: boolean;
   emailError?: string;
   totale?: number;
+  /** Copia dell'ordine inviata al cliente (email separata, senza Excel). */
+  customerCopySent?: boolean;
+  customerCopyError?: string;
+  customerCopyTo?: string;
 };
 
 function flattenCatalog(groups: OrderGroup[]): Map<number, OrderVariant> {
@@ -703,6 +721,62 @@ export async function submitOrder(
       });
     }
 
+    // O M A G G I O (paia): salvato a parte per poterlo mostrare nella stampa
+    // dell'ordine e quindi anche nella copia inviata al cliente (nel solo file
+    // Excel l'informazione non sarebbe disponibile fuori dall'Excel).
+    const omaggioPaia = isValidOmaggioPaia(payload.omaggio_paia)
+      ? payload.omaggio_paia
+      : null;
+    if (omaggioPaia) await saveOrderOmaggio(orderId, omaggioPaia);
+
+    // C O P I A   A L   C L I E N T E (email separata, SENZA allegato).
+    // Parte solo se: funzione attivata dall'amministratore + richiesta
+    // dall'agente + email del cliente valida. Non blocca MAI l'ordine.
+    let customerCopySent = false;
+    let customerCopyError: string | undefined;
+    let customerCopyTo: string | undefined;
+    if (payload.inviaCopiaCliente) {
+      const copySettings = await getCustomerCopySettings();
+      const destinatario = anagraficaRecord.email.trim();
+      if (!copySettings.enabled) {
+        customerCopyError =
+          "Invio copia al cliente disattivato dall'amministratore.";
+      } else if (!isValidEmailAddress(destinatario)) {
+        customerCopyError = "Email del cliente mancante o non valida.";
+      } else {
+        const emailConfig = await getEmailConfig();
+        const copy = buildCustomerCopyEmail({
+          numeroOrdine: numero,
+          dataOrdine,
+          pagamento: payload.pagamento,
+          cliente: { ...anagraficaRecord, citta: cittaConsegna },
+          items: orderItems,
+          totali: {
+            imponibile: round2(imponibile),
+            trasporto: round2(trasporto),
+            iva: round2(iva),
+            totale,
+          },
+          omaggioPaia,
+          message: copySettings.message,
+          displayName: emailConfig.displayName,
+        });
+        // Le risposte del cliente tornano alla casella ordini dell'ufficio.
+        const ufficio =
+          (await getSetting("ORDER_EMAIL_TO")) || DEFAULT_ORDER_EMAIL;
+        const copyResult = await sendOrderEmail({
+          to: destinatario,
+          subject: copy.subject,
+          text: copy.text,
+          html: copy.html,
+          replyTo: ufficio,
+        });
+        customerCopySent = copyResult.sent;
+        customerCopyTo = destinatario;
+        customerCopyError = copyResult.sent ? undefined : copyResult.error;
+      }
+    }
+
     return {
       success: true,
       numero_ordine: numero,
@@ -710,6 +784,9 @@ export async function submitOrder(
       totale,
       emailSent: emailResult?.sent ?? false,
       emailError: emailResult?.error ?? excelError,
+      customerCopySent,
+      customerCopyError,
+      customerCopyTo,
     };
   } catch (err) {
     // In produzione React nasconde l'errore dietro il generico #441:

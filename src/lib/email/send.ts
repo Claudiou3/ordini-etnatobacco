@@ -35,6 +35,10 @@ type EmailOpts = {
   to?: string;
   subject: string;
   text: string;
+  /** Versione HTML (facoltativa): usata per la copia dell'ordine al cliente. */
+  html?: string;
+  /** Indirizzo a cui far arrivare le risposte (facoltativo). */
+  replyTo?: string;
   attachment?: { filename: string; content: Uint8Array };
 };
 
@@ -72,6 +76,8 @@ async function sendViaSmtp(
       to: opts.recipient,
       subject: opts.subject,
       text: opts.text,
+      html: opts.html,
+      replyTo: opts.replyTo,
       attachments: opts.attachment
         ? [
             {
@@ -105,6 +111,9 @@ async function sendViaResend(
     subject: opts.subject,
     text: opts.text,
   };
+
+  if (opts.html) body.html = opts.html;
+  if (opts.replyTo) body.reply_to = opts.replyTo;
 
   if (opts.attachment) {
     body.attachments = [

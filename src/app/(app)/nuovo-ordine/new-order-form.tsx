@@ -66,10 +66,14 @@ export function NewOrderForm({
   groups,
   giftArticles,
   shippingSettings,
+  customerCopyEnabled,
 }: {
   groups: OrderGroup[];
   giftArticles: OrderVariant[];
   shippingSettings: ShippingSettings;
+  /* Interruttore dell'amministratore (Impostazioni): se e' false l'agente non
+     vede nulla di nuovo e al server non viene chiesta alcuna copia al cliente. */
+  customerCopyEnabled: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CustomerSearchResult[]>([]);
@@ -125,6 +129,9 @@ export function NewOrderForm({
   const [askOmaggio, setAskOmaggio] = useState(false);
   const [omaggioSi, setOmaggioSi] = useState(false);
   const [omaggioPcs, setOmaggioPcs] = useState(1);
+  // Spunta dell'agente: inviare al cliente la copia dell'ordine (visibile solo
+  // se la funzione e' attivata dall'amministratore nelle Impostazioni).
+  const [inviaCopiaCliente, setInviaCopiaCliente] = useState(true);
   // ----- SALVATAGGIO ANANAGRAFICA CLIENTE -----
   const [savingAnagrafica, setSavingAnagrafica] = useState(false);
   const [anagraficaMsg, setAnagraficaMsg] = useState<{
@@ -280,6 +287,12 @@ export function NewOrderForm({
             .filter(([, qty]) => (qty ?? 0) > 0)
             .map(([row, qty]) => ({ row: Number(row), qty })),
           gift: [],
+          // Paia di omaggio: salvate a parte per poterle mostrare nella stampa
+          // dell'ordine e nella copia inviata al cliente.
+          omaggio_paia: withOmaggio ? paiaClean : 0,
+          // Copia al cliente: parte solo se la funzione e' attiva e se l'agente
+          // ha lasciato la spunta.
+          inviaCopiaCliente: customerCopyEnabled && inviaCopiaCliente,
         });
         setOrderResult(res);
       } catch (err) {
@@ -1299,21 +1312,53 @@ export function NewOrderForm({
         )}
 
         {!askOmaggio ? (
-          <div className="form-actions">
-            <button
-              className="green-button"
-              type="button"
-              onClick={() => {
-                if (!canSubmit()) return;
-                setOmaggioSi(false);
-                setOmaggioPcs(1);
-                setAskOmaggio(true);
-              }}
-              disabled={!canSubmit() || sending}
-            >
-              ORDINE COMPLETATO
-            </button>
-          </div>
+          <>
+            {customerCopyEnabled && (
+              <label
+                className="customer-copy-opt"
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "flex-start",
+                  margin: "10px 0",
+                  padding: "10px 12px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 10,
+                  background: "#f8fafc",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={inviaCopiaCliente}
+                  onChange={(e) => setInviaCopiaCliente(e.target.checked)}
+                  style={{ marginTop: 3 }}
+                />
+                <span>
+                  Invia al cliente una copia dell&apos;ordine
+                  {fields.email.trim()
+                    ? ` (${fields.email.trim()})`
+                    : " — email del cliente mancante"}
+                </span>
+              </label>
+            )}
+            <div className="form-actions">
+              <button
+                className="green-button"
+                type="button"
+                onClick={() => {
+                  if (!canSubmit()) return;
+                  setOmaggioSi(false);
+                  setOmaggioPcs(1);
+                  setAskOmaggio(true);
+                }}
+                disabled={!canSubmit() || sending}
+              >
+                ORDINE COMPLETATO
+              </button>
+            </div>
+          </>
         ) : (
           <div
             className="omaggio-panel"
@@ -1370,6 +1415,16 @@ export function NewOrderForm({
               </label>
             )}
 
+            {customerCopyEnabled && (
+              <p className="settings-help">
+                {inviaCopiaCliente
+                  ? `Al cliente verrà inviata una copia dell'ordine a ${
+                      fields.email.trim() || "email mancante"
+                    }.`
+                  : "Al cliente NON verrà inviata la copia dell'ordine."}
+              </p>
+            )}
+
             <div className="form-actions">
               <button
                 className="primary-button"
@@ -1421,6 +1476,22 @@ export function NewOrderForm({
                 </>
               )}
             </p>
+            {(orderResult.customerCopySent ||
+              orderResult.customerCopyError) && (
+              <p>
+                {orderResult.customerCopySent ? (
+                  <>
+                    📧 Copia dell&apos;ordine inviata anche al cliente
+                    {orderResult.customerCopyTo
+                      ? ` (${orderResult.customerCopyTo})`
+                      : ""}
+                    .
+                  </>
+                ) : (
+                  <>⚠️ Copia al cliente non inviata: {orderResult.customerCopyError}</>
+                )}
+              </p>
+            )}
           </div>
         )}
       </section>
