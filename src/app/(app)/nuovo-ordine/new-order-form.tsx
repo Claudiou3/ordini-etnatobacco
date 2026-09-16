@@ -1258,7 +1258,7 @@ export function NewOrderForm({
                 return (
                   <div key={i} className="summary-line summary-gift">
                     <span>
-                      🎁 {line.qty} × {g.descrizione}
+                      {line.qty} × {g.descrizione}
                       {g.diottria ? ` (${g.diottria})` : ""}
                     </span>
                     <span>omaggio</span>

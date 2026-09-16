@@ -181,7 +181,7 @@ export default async function OrderDetailPage({
 
         {omaggioPaia ? (
           <p className="omaggio-note" role="status">
-            🎁 <strong>Omaggio:</strong>{" "}
+            <strong>Omaggio:</strong>{" "}
             {omaggioPaia === 1
               ? "1 paio di occhiali"
               : `${omaggioPaia} paia di occhiali`}
