@@ -15,14 +15,20 @@ import {
   fileRestoreOrder,
   deleteOrderExcelFile,
 } from "@/lib/orders/store";
+import { logOrderDeletion } from "@/lib/orders/delete-log";
 import { demoCancelOrder, demoRestoreOrder } from "@/lib/demo/store";
 
 /**
- * Elimina un ordine.
- * - L'amministratore puo' eliminare QUALSIASI ordine della piattaforma.
- * - L'agente puo' eliminare SOLO i propri ordini.
- * L'ordine viene rimosso dal database (o dal file locale) e, se presente,
- * anche il file Excel corrispondente in data/orders/.
+ * Elimina un ordine: operazione DEFINITIVA, riservata all'AMMINISTRATORE
+ * PRINCIPALE (in interfaccia il pulsante non compare a nessun altro).
+ *
+ * Guardia: prima anche l'agente poteva eliminare i propri ordini; ora non piu'
+ * (i sub-amministratori erano gia' esclusi). Per correggere un ordine sbagliato
+ * si usa "Annulla ordine", che resta visibile, tracciato e non perde nulla.
+ *
+ * Ogni eliminazione viene annotata nel registro (lib/orders/delete-log.ts) con
+ * data/ora, chi l'ha fatta, numero ordine, cliente e totale: l'ordine e il suo
+ * file Excel spariscono, ma la traccia resta.
  */
 export async function deleteOrderAction(
   orderId: string
@@ -30,30 +36,37 @@ export async function deleteOrderAction(
   const agent = await getCurrentAgent();
   if (!agent) return { error: "Sessione scaduta. Accedi di nuovo." };
   const admin = await getCurrentAdmin();
-  const isAdmin = Boolean(admin);
-  // I sub-amministratori sono in sola lettura: non eliminano ordini.
-  if (admin?.subAdmin) {
-    return { error: "Operazione riservata all'amministratore." };
+  if (!admin || admin.subAdmin) {
+    return { error: "Eliminazione riservata all'amministratore." };
   }
 
   const detail = await getOrderDetail(orderId, agent.id);
   if (!detail) return { error: "Ordine non trovato." };
-  if (!isAdmin && detail.order.agent_id !== agent.id) {
-    return { error: "Non puoi eliminare l'ordine di un altro agente." };
-  }
 
   const numero = detail.order.numero_ordine;
   // Il file Excel ora si chiama "agente - cliente": per eliminarlo si usa
   // l'URL salvato sull'ordine (fallback: vecchio nome con il numero ordine).
   const fileRef = detail.order.file_url || numero;
 
-  // Database (Supabase): l'agente elimina solo i propri (RLS), l'admin tutti.
+  // Registro delle eliminazioni: si salva PRIMA di rimuovere, cosi' la traccia
+  // resta anche se l'ordine (e il suo file) vengono cancellati.
+  await logOrderDeletion({
+    at: new Date().toISOString(),
+    by: admin.email || "amministratore",
+    numero_ordine: numero,
+    cliente: detail.order.customers?.ragione_sociale ?? "",
+    totale: Number(detail.order.totale ?? 0),
+  });
+
+  // Database (Supabase): l'amministratore elimina qualsiasi ordine.
   if (await isSupabaseConfigured()) {
     const supabase = await getDataClient();
     if (supabase) {
-      let query = supabase.from("orders").delete().eq("id", orderId);
-      if (!isAdmin) query = query.eq("agent_id", agent.id);
-      const { data, error } = await query.select("id");
+      const { data, error } = await supabase
+        .from("orders")
+        .delete()
+        .eq("id", orderId)
+        .select("id");
       // Eliminato davvero dal database: rimuovi anche il file Excel e via.
       if (!error && data && data.length > 0) {
         await deleteOrderExcelFile(fileRef);

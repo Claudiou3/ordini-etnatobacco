@@ -1,6 +1,5 @@
 import { promises as fs } from "node:fs";
 import { existsSync } from "node:fs";
-import path from "node:path";
 import XLSXPopulate from "xlsx-populate";
 import type { Workbook } from "xlsx-populate";
 import { appDataDir, appDataPath, appRootPath } from "@/lib/data-dir";

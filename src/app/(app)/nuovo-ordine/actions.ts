@@ -28,6 +28,7 @@ import {
 import {
   fileNextOrderNumber,
   fileCountOrdersByPrefix,
+  fileMaxOrderSuffix,
 } from "@/lib/orders/store";
 import {
   generateOrderWorkbook,
@@ -266,21 +267,36 @@ function flattenCatalog(groups: OrderGroup[]): Map<number, OrderVariant> {
 
 /** Prossimo numero progressivo per l'anno corrente. */
 async function nextOrderNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `ORD-${year}-`;
   if (await isSupabaseConfigured()) {
     const supabase = await getDataClient();
     if (supabase) {
-      const year = new Date().getFullYear();
-      const prefix = `ORD-${year}-`;
-      const { count, error } = await supabase
+      // Numerazione "MASSIMO usato + 1": si leggono i numeri esistenti (i piu'
+      // alti, ordine decrescente) e si prende il valore massimo. Cosi' un
+      // ordine ELIMINATO non fa piu' riusare un numero gia' assegnato a un
+      // documento inviato all'ufficio.
+      const { data, error } = await supabase
         .from("orders")
-        .select("id", { count: "exact", head: true })
-        .like("numero_ordine", `${prefix}%`);
-      // Se gli insert precedenti sono finiti sul file (fallback), il conteggio
-      // del DB e' piu' basso del reale: considera anche gli ordini su file
-      // per evitare numeri duplicati.
-      const dbCount = !error && count !== null ? count : 0;
+        .select("numero_ordine")
+        .like("numero_ordine", `${prefix}%`)
+        .order("numero_ordine", { ascending: false })
+        .limit(200);
+      let dbMax = 0;
+      if (!error) {
+        for (const row of (data ?? []) as { numero_ordine: string | null }[]) {
+          const m = /(\d+)\s*$/.exec(row.numero_ordine ?? "");
+          const n = m ? Number(m[1]) : NaN;
+          if (Number.isFinite(n) && n > dbMax) dbMax = n;
+        }
+      }
+      // Difese: se qualche insert precedente e' finito sul file locale si
+      // considera anche quello, e il conteggio fa da limite inferiore (mai
+      // numeri piu' bassi di quelli prodotti dal comportamento precedente).
+      const fileMax = await fileMaxOrderSuffix(prefix);
       const fileCount = await fileCountOrdersByPrefix(prefix);
-      return `${prefix}${String(Math.max(dbCount, fileCount) + 1).padStart(4, "0")}`;
+      const base = Math.max(dbMax, fileMax, fileCount);
+      return `${prefix}${String(base + 1).padStart(4, "0")}`;
     }
   }
   return fileNextOrderNumber();
@@ -738,6 +754,29 @@ export async function submitOrder(
       email: anagraficaRecord.email,
       cellulare: anagraficaRecord.cellulare,
     });
+
+    // ANAGRAFICA: si aggiornano SOLO email e cellulare del cliente con i valori
+    // usati in questo ordine, cosi' la scheda cliente (e le ricerche successive)
+    // restano allineate all'ultimo ordine. Nessun altro campo viene toccato e
+    // nulla viene cancellato; se il cliente non e' nel DB non si fa nulla.
+    if (
+      customerId &&
+      UUID_RE.test(customerId) &&
+      (await isSupabaseConfigured())
+    ) {
+      const supabase = await getDataClient();
+      if (supabase) {
+        await supabase
+          .from("customers")
+          .update({
+            email: anagraficaRecord.email || null,
+            cellulare: anagraficaRecord.cellulare || null,
+            updated_at: new Date().toISOString(),
+            updated_by: agent.id,
+          })
+          .eq("id", customerId);
+      }
+    }
 
     // C O P I A   A L   C L I E N T E (email separata, SENZA allegato).
     // Parte solo se: funzione attivata dall'amministratore + richiesta

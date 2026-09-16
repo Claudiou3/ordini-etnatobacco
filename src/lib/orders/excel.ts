@@ -2,7 +2,6 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import XLSXPopulate, {
-  type Workbook,
   type Sheet,
 } from "xlsx-populate";
 import JSZip from "jszip";

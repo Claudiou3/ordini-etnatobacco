@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useActionState } from "react";
+import { useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { addGaraAction, deleteGaraAction, type GaraActionState } from "./actions";
 import type { IncentiveGara, IncentiveKind, ClassificaRiga } from "@/lib/incentives";
@@ -73,11 +73,15 @@ export function ObiettiviPanel({
   const [nFrom, setNFrom] = useState(initFrom);
   const [nTo, setNTo] = useState(initTo);
 
-  // Sincronizza la classifica quando il periodo cambia (navigazione ?da&a).
-  useEffect(() => {
+  // Sincronizza la classifica quando il periodo cambia (navigazione ?da&a):
+  // riallineamento DURANTE IL RENDER (pattern React), senza setState in un
+  // effetto (evita il doppio render segnalato dal lint).
+  const [prevRange, setPrevRange] = useState(range);
+  if (prevRange.from !== range.from || prevRange.to !== range.to) {
+    setPrevRange(range);
     setCFrom(range.from);
     setCTo(range.to);
-  }, [range.from, range.to]);
+  }
 
   const [objState, objAction, objPending] = useActionState<
     GaraActionState,

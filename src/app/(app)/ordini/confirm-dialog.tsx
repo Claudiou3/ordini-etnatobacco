@@ -14,6 +14,7 @@ export function ConfirmDialog({
   confirmLabel = "Sì",
   cancelLabel = "No",
   busy = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: {
@@ -22,6 +23,8 @@ export function ConfirmDialog({
   confirmLabel?: string;
   cancelLabel?: string;
   busy?: boolean;
+  /** Disabilita SOLO il pulsante di conferma (es. conferma da digitare). */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -64,7 +67,7 @@ export function ConfirmDialog({
             type="button"
             className="danger-button"
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
           >
             {busy ? "Eliminazione…" : confirmLabel}
           </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useActionState } from "react";
+import { useRef, useState, useActionState } from "react";
 import {
   saveIncentivePlanAction,
   clearIncentivePlanAction,
@@ -62,11 +62,15 @@ export function IncentivePanel({
 
   // I selettori Mese/Anno sono inizializzati solo al mount: se il piano attivo
   // cambia (salvataggio/eliminazione) i valori vanno riallineati alla prop.
-  useEffect(() => {
+  // Riallineamento DURANTE IL RENDER (pattern React, come in Impostazioni ->
+  // Spese di spedizione): evita il setState dentro un effetto segnalato dal lint.
+  const [prevMonth, setPrevMonth] = useState(plan?.month);
+  if (prevMonth !== plan?.month) {
+    setPrevMonth(plan?.month);
     const next = planMonthParts(plan?.month);
     setMese(next.mese);
     setAnno(next.anno);
-  }, [plan?.month]);
+  }
 
   return (
     <section className="content-panel">

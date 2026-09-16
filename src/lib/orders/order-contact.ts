@@ -4,6 +4,7 @@ import XLSXPopulate from "xlsx-populate";
 import { appDataPath } from "@/lib/data-dir";
 import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
 import { downloadOrderExcel } from "@/lib/orders/storage";
+import { isValidEmailAddress } from "@/lib/customer-copy";
 
 /**
  * CONTATTI USATI NELL'ORDINE (email e cellulare del Passo 2).
@@ -41,9 +42,9 @@ function keyFor(orderId: string): string {
   return `${KEY_PREFIX}${orderId}`;
 }
 
-/** Sintassi email valida (stessa regola usata per la copia al cliente). */
+/** Sintassi email valida: stessa regola della copia al cliente (unica fonte). */
 export function isValidContactEmail(value: string | null | undefined): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((value ?? "").trim());
+  return isValidEmailAddress(value);
 }
 
 function normalize(value: Partial<OrderContact> | null | undefined): OrderContact {

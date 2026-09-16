@@ -51,6 +51,8 @@ export function OrdersFilter({
   const [deleting, setDeleting] = useState<string | null>(null);
   // Ordine in attesa di conferma eliminazione (modale "Sei certo…?").
   const [pendingDelete, setPendingDelete] = useState<OrderListItem | null>(null);
+  // Conferma forte: per eliminare bisogna scrivere il numero dell'ordine.
+  const [deleteCheck, setDeleteCheck] = useState("");
   // Ordine in attesa di ANNULLAMENTO (modale con motivazione).
   const [pendingCancel, setPendingCancel] = useState<OrderListItem | null>(null);
   const [cancelMotivo, setCancelMotivo] = useState("");
@@ -374,16 +376,21 @@ export function OrdersFilter({
                         ✕
                       </button>
                     ))}
-                  <button
-                    type="button"
-                    className="order-delete-btn"
-                    onClick={() => setPendingDelete(order)}
-                    disabled={deleting === order.id}
-                    aria-label={`Elimina ordine ${order.numero_ordine}`}
-                    title="Elimina ordine"
-                  >
-                    {deleting === order.id ? "…" : "🗑"}
-                  </button>
+                  {canManage && (
+                    <button
+                      type="button"
+                      className="order-delete-btn"
+                      onClick={() => {
+                        setDeleteCheck("");
+                        setPendingDelete(order);
+                      }}
+                      disabled={deleting === order.id}
+                      aria-label={`Elimina ordine ${order.numero_ordine}`}
+                      title="Elimina ordine (solo amministratore)"
+                    >
+                      {deleting === order.id ? "…" : "🗑"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -396,20 +403,42 @@ export function OrdersFilter({
           title="Elimina ordine"
           message={
             <>
-              Sei certo di volerlo eliminare?{" "}
+              Sei certo di voler eliminare{" "}
               <strong>{pendingDelete.numero_ordine}</strong> per{" "}
               <strong>
                 {pendingDelete.customers?.ragione_sociale ?? "cliente"}
               </strong>
-              .<br />
-              L&apos;operazione non può essere annullata.
+              ?
+              <br />
+              L&apos;operazione è <strong>definitiva</strong>: spariscono
+              l&apos;ordine e il suo file Excel, e il numero non verrà riusato.
+              <br />
+              <br />
+              Per confermare scrivi il numero dell&apos;ordine:
+              <input
+                className="form-input"
+                type="text"
+                value={deleteCheck}
+                onChange={(e) => setDeleteCheck(e.target.value)}
+                placeholder={pendingDelete.numero_ordine}
+                aria-label="Numero ordine da confermare"
+                style={{ marginTop: 8 }}
+                autoFocus
+              />
             </>
           }
-          confirmLabel="Sì"
+          confirmLabel="Elimina definitivamente"
           cancelLabel="No"
           busy={deleting === pendingDelete.id}
+          confirmDisabled={
+            deleteCheck.trim().toUpperCase() !==
+            pendingDelete.numero_ordine.trim().toUpperCase()
+          }
           onConfirm={() => void confirmDelete()}
-          onCancel={() => setPendingDelete(null)}
+          onCancel={() => {
+            setPendingDelete(null);
+            setDeleteCheck("");
+          }}
         />
       )}
 

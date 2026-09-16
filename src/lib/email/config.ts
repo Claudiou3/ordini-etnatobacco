@@ -2,7 +2,6 @@ import { promises as fs } from "node:fs";
 import { readStoredSetting, writeStoredSetting } from "@/lib/settings/store";
 import { appDataPath } from "@/lib/data-dir";
 import { getAppSetting, setAppSetting } from "@/lib/supabase/app-settings";
-import { getSetting } from "@/lib/settings/runtime";
 
 /**
  * Configurazione dell'account email (server SMTP/IMAP) usato dall'azienda.

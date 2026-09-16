@@ -192,14 +192,30 @@ export async function fileCountOrders(): Promise<number> {
   return (await load()).length;
 }
 
-/** Prossimo numero ordine progressivo per l'anno corrente. */
+/**
+ * Suffisso numerico piu' alto gia' usato per il prefisso indicato.
+ * Serve per la numerazione "massimo + 1": cosi' un ordine eliminato NON fa
+ * riusare un numero gia' assegnato a un documento inviato all'ufficio.
+ */
+export async function fileMaxOrderSuffix(prefix: string): Promise<number> {
+  const all = await load();
+  let max = 0;
+  for (const d of all) {
+    const numero = d.order.numero_ordine ?? "";
+    if (!numero.startsWith(prefix)) continue;
+    const m = /(\d+)\s*$/.exec(numero);
+    const n = m ? Number(m[1]) : NaN;
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return max;
+}
+
+/** Prossimo numero ordine progressivo per l'anno corrente (massimo + 1). */
 export async function fileNextOrderNumber(): Promise<string> {
   const year = new Date().getFullYear();
   const prefix = `ORD-${year}-`;
-  const all = await load();
-  const seq =
-    all.filter((d) => d.order.numero_ordine.startsWith(prefix)).length + 1;
-  return `${prefix}${String(seq).padStart(4, "0")}`;
+  const max = await fileMaxOrderSuffix(prefix);
+  return `${prefix}${String(max + 1).padStart(4, "0")}`;
 }
 
 /** Conta gli ordini del file con il prefisso indicato (per la numerazione). */
