@@ -227,7 +227,7 @@ function buildCustomerCopyHtml(args: {
     )
     .join("");
   const det = (label: string, value: string) =>
-    `<tr><td style="padding:2px 0;width:140px;color:#64748b;">${label}</td><td style="padding:2px 0;">${value}</td></tr>`;
+    `<tr><td style="padding:2px 0;width:140px;color:#64748b;">${label}</td><td style="padding:2px 0;word-break:break-word;overflow-wrap:anywhere;">${value}</td></tr>`;
   const capCitta = `${c.cap || "—"} ${c.citta || ""}`.trim();
 
   return `<!doctype html>

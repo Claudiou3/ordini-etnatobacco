@@ -1525,6 +1525,27 @@ h2 { font-size: 21px; }
   }
 }
 
+/* ============ Testi lunghi nel documento ordine (email, indirizzi) ============
+   L'email del cliente e' una "parola" unica senza spazi: senza queste regole
+   esce dalla cella della griglia e si sovrappone al campo accanto (Data
+   ordine), sia a video sia nella stampa/PDF. Qui va a capo dentro la cella. */
+.detail-grid > div {
+  min-width: 0;
+}
+.detail-grid dd {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+@media print {
+  .detail-grid > div {
+    min-width: 0;
+  }
+  .detail-grid dd {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
 
 
 
