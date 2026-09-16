@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentAgent, getCurrentAdmin } from "@/lib/supabase/session";
 import { getOrderDetail } from "@/lib/orders";
-import { getOrderOmaggio } from "@/lib/orders/omaggio";
+import { getOrderOmaggioWithRecovery } from "@/lib/orders/omaggio";
 import { getReadOrderIds } from "@/lib/orders/read";
 import { formatEur, formatDate } from "@/lib/format";
 import { PrintTrigger } from "../print-trigger";
@@ -32,7 +32,7 @@ export default async function OrderDetailPage({
   // Paia di occhiali in omaggio: salvate all'invio dell'ordine (l'informazione
   // non e' nella tabella orders). Compare nella stampa del documento e quindi
   // anche nella copia inviata al cliente.
-  const omaggioPaia = await getOrderOmaggio(order.id);
+  const omaggioPaia = await getOrderOmaggioWithRecovery(order.id, order.file_url);
   const admin = await getCurrentAdmin();
   // "Confermato" = ordine che l'amministratore ha confermato esplicitamente
   // (pulsante "Confermato"). Aprire l'ordine NON basta piu'.
@@ -180,7 +180,7 @@ export default async function OrderDetailPage({
         )}
 
         {omaggioPaia ? (
-          <p className="form-note" role="status">
+          <p className="omaggio-note" role="status">
             🎁 <strong>Omaggio:</strong>{" "}
             {omaggioPaia === 1
               ? "1 paio di occhiali"
