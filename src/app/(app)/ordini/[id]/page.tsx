@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentAgent, getCurrentAdmin } from "@/lib/supabase/session";
 import { getOrderDetail } from "@/lib/orders";
 import { getOrderOmaggioWithRecovery } from "@/lib/orders/omaggio";
+import { getOrderContactWithRecovery } from "@/lib/orders/order-contact";
 import { getReadOrderIds } from "@/lib/orders/read";
 import { formatEur, formatDate } from "@/lib/format";
 import { PrintTrigger } from "../print-trigger";
@@ -33,6 +34,13 @@ export default async function OrderDetailPage({
   // non e' nella tabella orders). Compare nella stampa del documento e quindi
   // anche nella copia inviata al cliente.
   const omaggioPaia = await getOrderOmaggioWithRecovery(order.id, order.file_url);
+  // Email e cellulare USATI in questo ordine (Passo 2): l'ordine non li
+  // conserva nella tabella `orders`, quindi senza questo si leggeva
+  // l'anagrafica e si vedeva l'email vecchia se l'agente l'aveva cambiata.
+  const contattoOrdine = await getOrderContactWithRecovery(
+    order.id,
+    order.file_url
+  );
   const admin = await getCurrentAdmin();
   // "Confermato" = ordine che l'amministratore ha confermato esplicitamente
   // (pulsante "Confermato"). Aprire l'ordine NON basta piu'.
@@ -109,11 +117,13 @@ export default async function OrderDetailPage({
           </div>
           <div>
             <dt>Cellulare</dt>
-            <dd>{order.customers?.cellulare || "—"}</dd>
+            <dd>
+              {contattoOrdine?.cellulare || order.customers?.cellulare || "—"}
+            </dd>
           </div>
           <div>
             <dt>Email</dt>
-            <dd>{order.customers?.email || "—"}</dd>
+            <dd>{contattoOrdine?.email || order.customers?.email || "—"}</dd>
           </div>
           <div>
             <dt>Data ordine</dt>

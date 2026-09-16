@@ -43,6 +43,7 @@ import {
   isValidEmailAddress,
 } from "@/lib/customer-copy";
 import { isValidOmaggioPaia, saveOrderOmaggio } from "@/lib/orders/omaggio";
+import { saveOrderContact } from "@/lib/orders/order-contact";
 import { getDataClient } from "@/lib/supabase/data";
 import type { OrderDetail } from "@/lib/types";
 
@@ -728,6 +729,15 @@ export async function submitOrder(
       ? payload.omaggio_paia
       : null;
     if (omaggioPaia) await saveOrderOmaggio(orderId, omaggioPaia);
+
+    // CONTATTI dell'ordine (email e cellulare del Passo 2): la tabella `orders`
+    // non li conserva, quindi il documento leggeva l'anagrafica e mostrava
+    // l'email vecchia se l'agente l'aveva cambiata prima di trasmettere. Qui
+    // salviamo i valori effettivi di QUESTO ordine.
+    await saveOrderContact(orderId, {
+      email: anagraficaRecord.email,
+      cellulare: anagraficaRecord.cellulare,
+    });
 
     // C O P I A   A L   C L I E N T E (email separata, SENZA allegato).
     // Parte solo se: funzione attivata dall'amministratore + richiesta
