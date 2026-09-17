@@ -83,19 +83,34 @@ export function DownloadCatalogButton({ iconUrl }: { iconUrl?: string }) {
         <p className="install-step-title">iPhone / iPad (Safari)</p>
         <ol className="install-steps">
           <li>
-            Guarda <strong>in basso al centro</strong> di Safari: c&apos;è il
-            pulsante <strong>Condividi</strong> (quadrato con freccia verso
-            l&apos;alto)
+            Apri il sito con <strong>Safari</strong> e tocca il pulsante{" "}
+            <strong>&quot;SCARICA L&apos;APP&quot;</strong>
           </li>
           <li>
-            Toccato quello, scegli{" "}
-            <strong>&quot;Aggiungi a Home&quot;</strong>
+            Tocca i <strong>tre pallini in basso a destra</strong> (menu di
+            Safari)
+          </li>
+          <li>
+            Premi l&apos;<strong>icona Condividi</strong> (il quadrato con la
+            freccia verso l&apos;alto)
+          </li>
+          <li>
+            Tocca <strong>&quot;Visualizza altro&quot;</strong> (in basso a
+            destra)
+          </li>
+          <li>
+            Scegli <strong>&quot;Aggiungi alla schermata Home&quot;</strong>
           </li>
           <li>
             Premi <strong>&quot;Aggiungi&quot;</strong>: ora l&apos;icona del
             catalogo è sulla Home
           </li>
         </ol>
+        <p className="install-note">
+          ⚠️ Il comando compare solo aprendo il sito con{" "}
+          <strong>Safari</strong>: le voci e la loro posizione possono cambiare
+          leggermente in base alla versione di iOS.
+        </p>
       </>
     ),
     // STEPS_ANDROID
