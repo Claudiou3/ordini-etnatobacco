@@ -34,13 +34,55 @@ function monthLabel(month: string): string {
 }
 
 /**
+ * Mese corrente in formato "YYYY-MM" calcolato sul fuso ITALIANO
+ * (Europe/Rome). Cosi' il valore e' lo stesso sia sul server (che gira in UTC)
+ * sia nel browser: la sezione si apre sempre sul mese in corso e non ci sono
+ * disallineamenti fra HTML iniziale e idratazione.
+ */
+function currentMonthKey(): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Rome",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((p) => p.type === "year")?.value ?? "";
+  const month = parts.find((p) => p.type === "month")?.value ?? "";
+  return year && month ? `${year}-${month}` : "";
+}
+
+/** Riga ordine come arriva dalla vista provvigioni. */
+type CommissionOrder = ClientCommissionData["orders"][number];
+
+/**
+ * Ordini che ricadono nel periodo scelto: mese ("YYYY-MM") e/o intervallo di
+ * date ("YYYY-MM-DD"). Senza filtri ritorna tutti gli ordini.
+ */
+function ordersInPeriod(
+  orders: CommissionOrder[],
+  month: string,
+  dateFrom: string,
+  dateTo: string
+): CommissionOrder[] {
+  return orders.filter((o) => {
+    const data = String(o.data ?? "");
+    if (month && !data.startsWith(month)) return false;
+    if (dateFrom && data < dateFrom) return false;
+    if (dateTo && data > dateTo) return false;
+    return true;
+  });
+}
+
+/**
  * Provvigioni LATO AGENTE, raggruppate per cliente: mostra la provvigione
- * calcolata su ogni singolo ordine e il totale complessivo, con filtro
- * mese/anno (stesso comportamento del pannello amministratore).
+ * calcolata su ogni singolo ordine e il totale complessivo.
+ * All'apertura il periodo selezionato e' il MESE CORRENTE (l'elenco resta
+ * corto e i totali riguardano il mese in corso); restano comunque disponibili
+ * il filtro per mese/anno, "Tutti i mesi" e l'intervallo di date.
  */
 export function AgentCommissionPanel({ view }: { view: AgentCommissionView }) {
   const { clients, rates } = view;
-  const [month, setMonth] = useState("");
+  // Valore iniziale = mese corrente (calcolato una sola volta, sul fuso italiano).
+  const [month, setMonth] = useState(currentMonthKey);
   // Filtro per intervallo di date ("YYYY-MM-DD").
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -56,6 +98,17 @@ export function AgentCommissionPanel({ view }: { view: AgentCommissionView }) {
     return Array.from(set).sort().reverse();
   }, [clients]);
 
+  /**
+   * Mesi proposti dal filtro: quelli in cui ci sono ordini PIU' il mese
+   * corrente, cosi' la tendina mostra sempre la voce selezionata all'apertura
+   * anche se in questo mese non e' ancora stato emesso nessun ordine.
+   */
+  const monthOptions = useMemo(() => {
+    const set = new Set(availableMonths);
+    set.add(currentMonthKey());
+    return Array.from(set).sort().reverse();
+  }, [availableMonths]);
+
   /** Etichetta del periodo filtrato (mese oppure intervallo date). */
   function periodLabel(): string {
     if (month) return monthLabel(month);
@@ -66,17 +119,7 @@ export function AgentCommissionPanel({ view }: { view: AgentCommissionView }) {
   }
 
   function ordersFor(client: ClientCommissionData) {
-    let orders = client.orders;
-    if (month) {
-      orders = orders.filter((o) => String(o.data ?? "").startsWith(month));
-    }
-    if (dateFrom) {
-      orders = orders.filter((o) => String(o.data ?? "") >= dateFrom);
-    }
-    if (dateTo) {
-      orders = orders.filter((o) => String(o.data ?? "") <= dateTo);
-    }
-    return orders;
+    return ordersInPeriod(client.orders, month, dateFrom, dateTo);
   }
 
   function imponibileFor(client: ClientCommissionData): number {
@@ -97,9 +140,25 @@ export function AgentCommissionPanel({ view }: { view: AgentCommissionView }) {
     return groups;
   }
 
-  const totalOrders = clients.reduce((s, c) => s + ordersFor(c).length, 0);
-  const totalImponibile = clients.reduce((s, c) => s + imponibileFor(c), 0);
-  const totalCommission = clients.reduce((s, c) => s + commissionFor(c), 0);
+  /**
+   * Clienti mostrati nell'elenco: solo quelli con ALMENO UN ORDINE nel periodo
+   * selezionato. All'apertura (mese corrente) la sezione resta quindi corta e
+   * non si riempie di righe vuote; con "Tutti i mesi" si vedono tutti i clienti
+   * (comportamento di sempre).
+   */
+  const visibleClients = clients.filter(
+    (c) => ordersInPeriod(c.orders, month, dateFrom, dateTo).length > 0
+  );
+
+  const totalOrders = visibleClients.reduce((s, c) => s + ordersFor(c).length, 0);
+  const totalImponibile = visibleClients.reduce(
+    (s, c) => s + imponibileFor(c),
+    0
+  );
+  const totalCommission = visibleClients.reduce(
+    (s, c) => s + commissionFor(c),
+    0
+  );
 
   return (
     <section className="content-panel" aria-label="Provvigioni per cliente">
@@ -109,8 +168,9 @@ export function AgentCommissionPanel({ view }: { view: AgentCommissionView }) {
           <h2>Ordini e provvigioni per cliente</h2>
           <p className="settings-help">
             Imponibile = solo merce (escluse spese di spedizione e IVA).
-            Filtra per mese/anno oppure per un intervallo di date per vedere
-            quanto spetta per ogni cliente.
+            All&apos;apertura vedi il <strong>mese corrente</strong>: puoi
+            scegliere un altro mese/anno, &quot;Tutti i mesi&quot; oppure un
+            intervallo di date per vedere quanto spetta per ogni cliente.
           </p>
         </div>
       </div>
@@ -123,8 +183,12 @@ export function AgentCommissionPanel({ view }: { view: AgentCommissionView }) {
         </article>
         <article className="stat-card">
           <span className="stat-label">Clienti</span>
-          <strong>{clients.length}</strong>
-          <span className="stat-note">Con ordini trasmessi</span>
+          <strong>{visibleClients.length}</strong>
+          <span className="stat-note">
+            {month || dateFrom || dateTo
+              ? "Con ordini nel periodo"
+              : "Con ordini trasmessi"}
+          </span>
         </article>
         <article className="stat-card">
           <span className="stat-label">Totale imponibile</span>
@@ -149,7 +213,7 @@ export function AgentCommissionPanel({ view }: { view: AgentCommissionView }) {
             onChange={(e) => setMonth(e.target.value)}
           >
             <option value="">Tutti i mesi</option>
-            {availableMonths.map((m) => (
+            {monthOptions.map((m) => (
               <option key={m} value={m}>
                 {monthLabel(m)}
               </option>
@@ -202,14 +266,17 @@ export function AgentCommissionPanel({ view }: { view: AgentCommissionView }) {
       </div>
 
 
-      {clients.length === 0 ? (
+      {visibleClients.length === 0 ? (
         <p className="empty-state">
-          Nessun ordine registrato: i tuoi ordini appariranno qui con le
-          provvigioni per cliente.
+          {month || dateFrom || dateTo
+            ? `Nessun ordine nel periodo${
+                periodLabel() ? ` ${periodLabel()}` : ""
+              }: scegli un altro mese/anno oppure "Tutti i mesi".`
+            : "Nessun ordine registrato: i tuoi ordini appariranno qui con le provvigioni per cliente."}
         </p>
       ) : (
         <div className="agent-list">
-          {clients.map((client) => (
+          {visibleClients.map((client) => (
             <details key={client.cliente} className="agent-folder">
               <summary className="agent-folder-head">
                 <span className="agent-folder-title">
