@@ -17,6 +17,12 @@ import {
 } from "@/lib/orders/store";
 import { logOrderDeletion } from "@/lib/orders/delete-log";
 import { demoCancelOrder, demoRestoreOrder } from "@/lib/demo/store";
+import {
+  saveOrderAnagrafica,
+  normalizeOrderAnagrafica,
+  type OrderAnagrafica,
+} from "@/lib/orders/order-anagrafica";
+import { orderAnagraficaSchema } from "@/lib/validation";
 
 /**
  * Elimina un ordine: operazione DEFINITIVA, riservata all'AMMINISTRATORE
@@ -236,4 +242,79 @@ export async function restoreOrderAction(
   revalidatePath("/console");
   revalidatePath("/agenti");
   return { success: true, orderId };
+}
+
+export type OrderAnagraficaState = { error?: string; success?: boolean };
+
+/**
+ * CORREGGE l'anagrafica di un ordine (errore di battitura dell'agente).
+ *
+ * Riservata all'AMMINISTRATORE PRINCIPALE: gli agenti e i sub-amministratori non
+ * possono modificarla. La correzione e' una copia salvata a parte e legata al
+ * singolo ordine: l'ordine originale, il file Excel, l'anagrafica condivisa dei
+ * clienti e gli altri ordini restano INVARIATI.
+ */
+export async function updateOrderAnagraficaAction(
+  _prev: OrderAnagraficaState,
+  formData: FormData
+): Promise<OrderAnagraficaState> {
+  const admin = await getCurrentAdmin();
+  if (!admin || admin.subAdmin) {
+    return { error: "Operazione riservata all'amministratore." };
+  }
+
+  const orderId = String(formData.get("order_id") ?? "").trim();
+  if (!orderId) return { error: "Ordine non specificato." };
+
+  const payload = {
+    ragione_sociale: String(formData.get("ragione_sociale") ?? ""),
+    indirizzo: String(formData.get("indirizzo") ?? ""),
+    cap: String(formData.get("cap") ?? ""),
+    citta: String(formData.get("citta") ?? ""),
+    provincia: String(formData.get("provincia") ?? ""),
+    partita_iva: String(formData.get("partita_iva") ?? ""),
+    codice_fiscale: String(formData.get("codice_fiscale") ?? ""),
+    sdi: String(formData.get("sdi") ?? ""),
+    cellulare: String(formData.get("cellulare") ?? ""),
+    email: String(formData.get("email") ?? ""),
+  };
+
+  const parsed = orderAnagraficaSchema.safeParse(payload);
+  if (!parsed.success) {
+    return {
+      error:
+        "Controlla i dati inseriti: la ragione sociale è obbligatoria e l'email deve essere valida.",
+    };
+  }
+
+  // Verifica che l'ordine esista davvero (l'amministratore vede tutti gli ordini).
+  const detail = await getOrderDetail(orderId, "admin-agent");
+  if (!detail) return { error: "Ordine non trovato." };
+
+  const clean: OrderAnagrafica = normalizeOrderAnagrafica({
+    ragione_sociale: parsed.data.ragione_sociale,
+    indirizzo: parsed.data.indirizzo ?? "",
+    cap: parsed.data.cap ?? "",
+    citta: parsed.data.citta ?? "",
+    provincia: parsed.data.provincia ?? "",
+    partita_iva: parsed.data.partita_iva ?? "",
+    codice_fiscale: parsed.data.codice_fiscale ?? "",
+    sdi: parsed.data.sdi ?? "",
+    cellulare: parsed.data.cellulare ?? "",
+    email: parsed.data.email ?? "",
+  });
+
+  const saved = await saveOrderAnagrafica(orderId, clean, admin.email || null);
+  if (!saved) {
+    return {
+      error:
+        "Correzione non salvata (Supabase non raggiungibile). Riprova tra qualche secondo.",
+    };
+  }
+
+  revalidatePath(`/ordini/${orderId}`);
+  revalidatePath("/ordini");
+  revalidatePath("/console");
+  revalidatePath("/dashboard");
+  return { success: true };
 }

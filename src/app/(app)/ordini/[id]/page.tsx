@@ -10,6 +10,11 @@ import { PrintTrigger } from "../print-trigger";
 import { PrintOrderButton } from "../print-order-button";
 import { OrderCancelControl } from "../order-cancel-control";
 import { ConfirmOrderButton } from "../confirm-order-button";
+import { OrderAnagraficaEditor } from "../order-anagrafica-editor";
+import {
+  getOrderAnagrafica,
+  effectiveOrderAnagrafica,
+} from "@/lib/orders/order-anagrafica";
 
 export const dynamic = "force-dynamic";
 
@@ -42,13 +47,36 @@ export default async function OrderDetailPage({
     order.file_url
   );
   const admin = await getCurrentAdmin();
+  // Correzione anagrafica inserita dall'amministratore (se presente): vale solo
+  // per questo ordine e ha la priorita' sui valori originali del cliente.
+  // Non modifica l'ordine, il file Excel ne' l'anagrafica condivisa dei clienti.
+  const overrideAnagrafica = await getOrderAnagrafica(order.id);
+  const anagrafica = effectiveOrderAnagrafica(
+    {
+      ragione_sociale: order.customers?.ragione_sociale ?? "",
+      indirizzo: order.customers?.indirizzo ?? "",
+      cap: order.customers?.cap ?? "",
+      citta: order.customers?.citta ?? "",
+      provincia: order.customers?.provincia ?? "",
+      partita_iva: order.partita_iva ?? order.customers?.partita_iva ?? "",
+      codice_fiscale:
+        order.codice_fiscale ?? order.customers?.codice_fiscale ?? "",
+      sdi: order.customers?.sdi ?? "",
+      cellulare:
+        contattoOrdine?.cellulare || order.customers?.cellulare || "",
+      email: contattoOrdine?.email || order.customers?.email || "",
+    },
+    overrideAnagrafica
+  );
   // "Confermato" = ordine che l'amministratore ha confermato esplicitamente
   // (pulsante "Confermato"). Aprire l'ordine NON basta piu'.
   const readSet = await getReadOrderIds();
   const confirmed = readSet.has(order.id);
   const canConfirm = Boolean(admin && !admin.subAdmin);
+  // Correzione anagrafica: riservata all'amministratore principale.
+  const canEditAnagrafica = Boolean(admin && !admin.subAdmin);
   const isCancelled = order.stato === "annullato";
-  const cliente = order.customers?.ragione_sociale ?? "Cliente sconosciuto";
+  const cliente = anagrafica.ragione_sociale || "Cliente sconosciuto";
 
   return (
     <>
@@ -61,6 +89,14 @@ export default async function OrderDetailPage({
           <h1>Ordine {order.numero_ordine}</h1>
         </div>
         <div className="topbar-actions">
+          {canEditAnagrafica && (
+            <OrderAnagraficaEditor
+              orderId={order.id}
+              numeroOrdine={order.numero_ordine}
+              cliente={cliente}
+              initial={anagrafica}
+            />
+          )}
           <OrderCancelControl
             orderId={order.id}
             numeroOrdine={order.numero_ordine}
@@ -89,41 +125,39 @@ export default async function OrderDetailPage({
           </div>
           <div>
             <dt>Indirizzo</dt>
-            <dd>{order.customers?.indirizzo || "—"}</dd>
+            <dd>{anagrafica.indirizzo || "—"}</dd>
           </div>
           <div>
             <dt>CAP</dt>
-            <dd>{order.customers?.cap || "—"}</dd>
+            <dd>{anagrafica.cap || "—"}</dd>
           </div>
           <div>
             <dt>Città</dt>
-            <dd>{order.customers?.citta || "—"}</dd>
+            <dd>{anagrafica.citta || "—"}</dd>
           </div>
           <div>
             <dt>Provincia</dt>
-            <dd>{order.customers?.provincia || "—"}</dd>
+            <dd>{anagrafica.provincia || "—"}</dd>
           </div>
           <div>
             <dt>P.IVA / Codice fiscale</dt>
             <dd>
-              {[order.partita_iva, order.codice_fiscale]
+              {[anagrafica.partita_iva, anagrafica.codice_fiscale]
                 .filter(Boolean)
                 .join(" / ") || "—"}
             </dd>
           </div>
           <div>
             <dt>SDI</dt>
-            <dd>{order.customers?.sdi || "—"}</dd>
+            <dd>{anagrafica.sdi || "—"}</dd>
           </div>
           <div>
             <dt>Cellulare</dt>
-            <dd>
-              {contattoOrdine?.cellulare || order.customers?.cellulare || "—"}
-            </dd>
+            <dd>{anagrafica.cellulare || "—"}</dd>
           </div>
           <div>
             <dt>Email</dt>
-            <dd>{contattoOrdine?.email || order.customers?.email || "—"}</dd>
+            <dd>{anagrafica.email || "—"}</dd>
           </div>
           <div>
             <dt>Data ordine</dt>
