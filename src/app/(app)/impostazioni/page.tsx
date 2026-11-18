@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentAdmin } from "@/lib/supabase/session";
-import { listSettingsStatus } from "@/lib/settings/runtime";
+import { listSettingsStatus, getSetting } from "@/lib/settings/runtime";
 import { getEmailConfig } from "@/lib/email/config";
 import { getLogos } from "@/lib/logos";
 import { getShippingSettings } from "@/lib/shipping-settings";
@@ -37,6 +37,11 @@ export default async function ImpostazioniPage() {
   ]);
 
   const orderRecipient = await getOrderRecipient();
+  // Solo gli indirizzi email (non segreti) vengono mostrati in chiaro.
+  const visibleValues: Record<string, string> = {
+    ORDER_EMAIL_TO: orderRecipient,
+    EMAIL_FROM: ((await getSetting("EMAIL_FROM")) ?? "").trim(),
+  };
 
   return (
     <>
@@ -66,7 +71,7 @@ export default async function ImpostazioniPage() {
 
       <ShippingForm settings={shipping} />
 
-      <SettingsForm keys={keys} />
+      <SettingsForm keys={keys} visibleValues={visibleValues} />
 
       <EmailConfigForm config={emailConfig} />
 

@@ -4,7 +4,13 @@ import { useActionState } from "react";
 import type { SettingsStatus } from "@/lib/settings/runtime";
 import { saveSetting, clearSetting, type SettingsActionState } from "./actions";
 
-export function SettingsForm({ keys }: { keys: SettingsStatus[] }) {
+export function SettingsForm({
+  keys,
+  visibleValues = {},
+}: {
+  keys: SettingsStatus[];
+  visibleValues?: Record<string, string>;
+}) {
   const [state, formAction, pending] = useActionState<SettingsActionState, FormData>(
     saveSetting,
     {}
@@ -14,7 +20,8 @@ export function SettingsForm({ keys }: { keys: SettingsStatus[] }) {
     <div className="settings-list">
       <p className="config-warning" role="status">
         I valori vengono salvati <strong>crittografati</strong> (AES-256-GCM) e
-        <strong> non vengono mai mostrati di nuovo</strong>: vedrai solo lo stato
+        <strong> non vengono mai mostrati di nuovo</strong> (tranne gli
+        indirizzi email, mostrati in chiaro): vedrai solo lo stato
         &quot;configurata / non configurata&quot;. Le chiavi verranno realmente
         utilizzate dall&apos;app quando la piattaforma sarà online.
       </p>
@@ -26,6 +33,12 @@ export function SettingsForm({ keys }: { keys: SettingsStatus[] }) {
               <p className="eyebrow">{key.name}</p>
               <h2>{key.label}</h2>
               <p className="settings-help">{key.help}</p>
+              {key.name in visibleValues && (
+                <p className="settings-help">
+                  Valore attuale:{" "}
+                  <strong>{visibleValues[key.name] || "non impostato"}</strong>
+                </p>
+              )}
             </div>
             <span
               className={`status-pill${key.configured ? " status-pill-on" : ""}`}
@@ -39,11 +52,14 @@ export function SettingsForm({ keys }: { keys: SettingsStatus[] }) {
               <input type="hidden" name="name" value={key.name} />
               <input
                 className="form-input"
-                type="password"
+                type={key.name in visibleValues ? "text" : "password"}
                 name="value"
                 autoComplete="off"
+                defaultValue={visibleValues[key.name] || undefined}
                 placeholder={
-                  key.configured
+                  key.name in visibleValues
+                    ? "Inserisci l'indirizzo email…"
+                    : key.configured
                     ? "•••••••••••• (inserisci il nuovo valore per aggiornare)"
                     : "Inserisci il valore…"
                 }
