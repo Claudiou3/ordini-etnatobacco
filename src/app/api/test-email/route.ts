@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentAdmin } from "@/lib/supabase/session";
 import { sendOrderEmail } from "@/lib/email/send";
-import { getSetting } from "@/lib/settings/runtime";
-import { DEFAULT_ORDER_EMAIL } from "@/lib/email/send";
+import { getOrderRecipient } from "@/lib/email/send";
 import { getEmailConfig } from "@/lib/email/config";
 
 /**
@@ -27,9 +26,7 @@ export async function GET(request: Request) {
 
   const to = new URL(request.url).searchParams.get("to")?.trim() || undefined;
   const recipient =
-    to ||
-    (await getSetting("ORDER_EMAIL_TO")) ||
-    DEFAULT_ORDER_EMAIL;
+    to || (await getOrderRecipient());
 
   const emailConfig = await getEmailConfig();
 

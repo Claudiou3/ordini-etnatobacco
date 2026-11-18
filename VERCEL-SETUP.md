@@ -39,7 +39,7 @@ Environment Variables** → aggiungi per Production/Preview/Development:
 | `NEXT_PUBLIC_SUPABASE_URL` | https://xxxx.supabase.co (Settings → API) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon/publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role/secret key |
-| `ORDER_EMAIL_TO` | `ordinidetomaso@etnatobacco.com` |
+| `ORDER_EMAIL_TO` | `detomaso@etnatobacco.com` |
 | `EMAIL_ACCOUNT_PASSWORD` | password SMTP dell'account (Aruba) |
 | `EMAIL_ACCOUNT` | `ordinidetomaso@etnatobacco.com` (facoltativo) |
 | `EMAIL_SMTP_SERVER` | `smtps.aruba.it` (facoltativo, è il default) |

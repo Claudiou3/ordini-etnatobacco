@@ -121,6 +121,19 @@ export function NewOrderForm({
 
   // ----- INVIO -----
   const [orderResult, setOrderResult] = useState<SubmitOrderResult | null>(null);
+  const autoDownloadedRef = useRef<string | null>(null);
+  // Download automatico (una sola volta) del file dell'ordine trasmesso.
+  useEffect(() => {
+    if (!orderResult?.success || !orderResult.fileUrl) return;
+    if (autoDownloadedRef.current === orderResult.fileUrl) return;
+    autoDownloadedRef.current = orderResult.fileUrl;
+    const a = document.createElement("a");
+    a.href = orderResult.fileUrl;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }, [orderResult]);
   const [sending, setSending] = useState(false);
   // ----- NUOVO SISTEMA OMAGGIO (jolly "paia di occhiali") -----
   // Dopo "ORDINE COMPLETATO" si chiede se inserire l'omaggio (SI/NO) e, in
@@ -1460,7 +1473,18 @@ export function NewOrderForm({
             </p>
             <p>
               {orderResult.emailSent ? (
-                <>📧 Email con il modulo Excel inviata all&apos;ufficio.</>
+                <>
+                  📧 Email con il modulo Excel inviata all&apos;ufficio.
+                  {orderResult.fileUrl && (
+                    <>
+                      {" "}
+                      <a href={orderResult.fileUrl} download>
+                        Scarica di nuovo il file Excel
+                      </a>
+                      .
+                    </>
+                  )}
+                </>
               ) : (
                 <>
                   ⚠️ {orderResult.emailError ?? "Email non inviata."}{" "}

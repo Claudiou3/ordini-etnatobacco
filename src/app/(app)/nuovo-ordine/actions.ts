@@ -35,9 +35,9 @@ import {
   saveOrderWorkbook,
   sanitizeFileBase,
 } from "@/lib/orders/excel";
-import { sendOrderEmail, DEFAULT_ORDER_EMAIL } from "@/lib/email/send";
+import { sendOrderEmail, getOrderRecipient } from "@/lib/email/send";
 import { getEmailConfig } from "@/lib/email/config";
-import { getSetting, isSupabaseConfigured } from "@/lib/settings/runtime";
+import { isSupabaseConfigured } from "@/lib/settings/runtime";
 import {
   buildCustomerCopyEmail,
   getCustomerCopySettings,
@@ -811,8 +811,7 @@ export async function submitOrder(
           displayName: emailConfig.displayName,
         });
         // Le risposte del cliente tornano alla casella ordini dell'ufficio.
-        const ufficio =
-          (await getSetting("ORDER_EMAIL_TO")) || DEFAULT_ORDER_EMAIL;
+        const ufficio = await getOrderRecipient();
         const copyResult = await sendOrderEmail({
           to: destinatario,
           subject: copy.subject,

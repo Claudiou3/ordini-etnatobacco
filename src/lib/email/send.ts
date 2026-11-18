@@ -1,6 +1,11 @@
 import nodemailer from "nodemailer";
 import { getSetting } from "@/lib/settings/runtime";
-import { getEmailConfig, getEmailAccountPassword } from "@/lib/email/config";
+import {
+  getEmailConfig,
+  getEmailAccountPassword,
+  DEFAULT_EMAIL_ACCOUNT,
+} from "@/lib/email/config";
+import { readStoredSetting } from "@/lib/settings/store";
 
 /**
  * Invio email transazionali.
@@ -22,7 +27,17 @@ import { getEmailConfig, getEmailAccountPassword } from "@/lib/email/config";
  * il mittente da EMAIL_FROM, con fallback sull'account aziendale.
  */
 
-export const DEFAULT_ORDER_EMAIL = "ordinidetomaso@etnatobacco.com";
+export const DEFAULT_ORDER_EMAIL = "detomaso@etnatobacco.com";
+
+/**
+ * Destinatario degli ordini. Priorita': indirizzo salvato dal pannello
+ * Impostazioni (admin) -> variabile d'ambiente ORDER_EMAIL_TO -> default.
+ */
+export async function getOrderRecipient(): Promise<string> {
+  const stored = await readStoredSetting("ORDER_EMAIL_TO");
+  if (stored && stored.trim() !== "") return stored.trim();
+  return (await getSetting("ORDER_EMAIL_TO")) || DEFAULT_ORDER_EMAIL;
+}
 
 export type SendEmailResult = {
   ok: boolean;
@@ -160,8 +175,7 @@ async function sendViaResend(
 export async function sendOrderEmail(opts: EmailOpts): Promise<SendEmailResult> {
   const recipient =
     (opts.to && opts.to.trim()) ||
-    (await getSetting("ORDER_EMAIL_TO")) ||
-    DEFAULT_ORDER_EMAIL;
+    (await getOrderRecipient());
 
   const fromSetting = await getSetting("EMAIL_FROM");
   const emailConfig = await getEmailConfig();
@@ -169,7 +183,7 @@ export async function sendOrderEmail(opts: EmailOpts): Promise<SendEmailResult> 
     (fromSetting && fromSetting.trim()) ||
     (emailConfig.account
       ? `${emailConfig.displayName || "Ordini De Tomaso"} <${emailConfig.account}>`
-      : `Ordini De Tomaso <${DEFAULT_ORDER_EMAIL}>`);
+      : `Ordini De Tomaso <${DEFAULT_EMAIL_ACCOUNT}>`);
 
   const withRecipient = { ...opts, recipient };
 

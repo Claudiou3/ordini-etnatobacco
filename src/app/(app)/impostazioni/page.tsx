@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 import { getCurrentAdmin } from "@/lib/supabase/session";
-import { listSettingsStatus, getSetting } from "@/lib/settings/runtime";
+import { listSettingsStatus } from "@/lib/settings/runtime";
 import { getEmailConfig } from "@/lib/email/config";
 import { getLogos } from "@/lib/logos";
 import { getShippingSettings } from "@/lib/shipping-settings";
 import { getCustomerCopySettings } from "@/lib/customer-copy";
-import { DEFAULT_ORDER_EMAIL } from "@/lib/email/send";
+import { getOrderRecipient } from "@/lib/email/send";
 import { SettingsForm } from "./settings-form";
 import { CustomerCopyForm } from "./customer-copy-form";
 import { EmailConfigForm } from "./email-config-form";
@@ -36,7 +36,7 @@ export default async function ImpostazioniPage() {
     getCustomerCopySettings(),
   ]);
 
-  const orderRecipient = (await getSetting("ORDER_EMAIL_TO")) || DEFAULT_ORDER_EMAIL;
+  const orderRecipient = await getOrderRecipient();
 
   return (
     <>
