@@ -41,3 +41,36 @@ export const orderAnagraficaSchema = z.object({
 });
 
 export type OrderAnagraficaInput = z.infer<typeof orderAnagraficaSchema>;
+
+/**
+ * MODIFICA COMPLETA di un ordine (solo amministratore principale): anagrafica
+ * dell'ordine, PEC/CMNR/note, righe articolo (quantita' e sconto %) e omaggi.
+ */
+export const orderEditSchema = z.object({
+  order_id: z.string().trim().min(1).max(100),
+  anagrafica: orderAnagraficaSchema,
+  pec: z.string().trim().max(200),
+  cmnr: z.string().trim().max(100),
+  note: z.string().trim().max(2000),
+  items: z
+    .array(
+      z.object({
+        id: z.string().trim().max(100).optional(),
+        row: z.number().int().min(1).max(100000),
+        qty: z.number().int().min(1).max(999),
+        pct: z.number().min(0).max(100),
+      })
+    )
+    .max(300),
+  gifts: z
+    .array(
+      z.object({
+        id: z.string().trim().max(100).optional(),
+        row: z.number().int().min(1).max(100000),
+        qty: z.number().int().min(1).max(100),
+      })
+    )
+    .max(50),
+});
+
+export type OrderEditInput = z.infer<typeof orderEditSchema>;

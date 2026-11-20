@@ -223,3 +223,23 @@ export async function fileCountOrdersByPrefix(prefix: string): Promise<number> {
   const all = await load();
   return all.filter((d) => d.order.numero_ordine.startsWith(prefix)).length;
 }
+
+/**
+ * MODIFICA ordine da parte dell'amministratore: sostituisce testata e righe
+ * dell'ordine salvato su file. Ritorna false se l'ordine non e' sul file.
+ */
+export async function fileUpdateOrderDetail(
+  orderId: string,
+  patch: {
+    order: Partial<OrderDetail["order"]>;
+    items: OrderDetail["items"];
+  }
+): Promise<boolean> {
+  const all = await load();
+  const detail = all.find((d) => d.order.id === orderId);
+  if (!detail) return false;
+  detail.order = { ...detail.order, ...patch.order };
+  detail.items = patch.items;
+  await writeAll(all);
+  return true;
+}

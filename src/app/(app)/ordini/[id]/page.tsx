@@ -11,6 +11,7 @@ import { PrintOrderButton } from "../print-order-button";
 import { OrderCancelControl } from "../order-cancel-control";
 import { ConfirmOrderButton } from "../confirm-order-button";
 import { OrderAnagraficaEditor } from "../order-anagrafica-editor";
+import { OrderEditControl } from "../order-edit-form";
 import {
   getOrderAnagrafica,
   effectiveOrderAnagrafica,
@@ -95,6 +96,13 @@ export default async function OrderDetailPage({
               numeroOrdine={order.numero_ordine}
               cliente={cliente}
               initial={anagrafica}
+            />
+          )}
+          {canEditAnagrafica && (
+            <OrderEditControl
+              orderId={order.id}
+              numeroOrdine={order.numero_ordine}
+              isCancelled={isCancelled}
             />
           )}
           <OrderCancelControl
